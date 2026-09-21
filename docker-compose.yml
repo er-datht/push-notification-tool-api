@@ -1,0 +1,40 @@
+# Local MySQL 8 for development. Nothing here is used on staging/production,
+# where the database is a managed instance and the app gets DATABASE_URL from
+# the environment.
+#
+#   docker compose up -d      start (first run pulls the image)
+#   docker compose ps         "healthy" means it accepts connections
+#   docker compose down       stop; data survives in the volume
+#   docker compose down -v    stop AND wipe the data
+#
+# The MYSQL_* values come from .env (copy .env.example). The same values go
+# into DATABASE_URL, which is what the app and Prisma read.
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: push-tool-mysql
+    # utf8mb4 is the only charset that holds every Japanese character and emoji.
+    # MySQL's plain "utf8" is 3 bytes and silently corrupts 4-byte characters.
+    # The server stays on UTC on purpose: Prisma treats every DateTime as UTC,
+    # and Asia/Tokyo is applied in application code, never in the database.
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  mysql_data:
