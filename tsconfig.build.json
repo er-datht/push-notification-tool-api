@@ -1,0 +1,13 @@
+{
+  // `yarn build` uses this one: same rules as tsconfig.json, but it only
+  // compiles src/ (no test files, no root config files) into dist/.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "rootDir": "src",
+    "outDir": "dist",
+    "sourceMap": true
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist", "src/**/*.test.ts"]
+}

@@ -1,0 +1,33 @@
+{
+  "compilerOptions": {
+    // Node 22 runs all of ES2022 natively, so nothing needs down-levelling.
+    "target": "ES2022",
+    "lib": ["ES2022"],
+
+    // Resolve modules the way Node's own ESM loader does. This is why relative
+    // imports carry a `.js` extension even though the source file is `.ts`.
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+
+    // Emit settings live in tsconfig.build.json; this file is for the editor,
+    // `yarn typecheck` and Vitest, which also need the root config files below.
+    "noEmit": true,
+
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+
+    // Same rules as the FE repo, so the two codebases share one set of habits:
+    // types must be imported as types, no enums/namespaces, no unused code.
+    "verbatimModuleSyntax": true,
+    "erasableSyntaxOnly": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+
+    "types": ["node"]
+  },
+  "include": ["src/**/*.ts", "prisma.config.ts", "vitest.config.ts"],
+  "exclude": ["node_modules", "dist"]
+}
