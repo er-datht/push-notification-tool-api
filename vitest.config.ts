@@ -1,0 +1,12 @@
+import { defineConfig } from 'vitest/config'
+
+export default defineConfig({
+  test: {
+    // Vitest sets NODE_ENV=test, so env.ts, logger.ts and prisma.ts take their
+    // quiet, non-development paths without any test-specific switches.
+    include: ['src/**/*.test.ts'],
+    // Tests that reach the database need MySQL up (docker compose up -d).
+    // Generous timeout: the first connection of a run can take a moment.
+    testTimeout: 10_000,
+  },
+})

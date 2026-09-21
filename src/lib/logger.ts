@@ -14,7 +14,9 @@ import { pino } from 'pino'
 import { env } from './env.js'
 
 export const logger = pino({
-  level: env.LOG_LEVEL,
+  // Silent under Vitest: pino writes to stdout directly, so nothing else can
+  // keep it out of the test output. Flip to env.LOG_LEVEL when debugging a test.
+  level: env.NODE_ENV === 'test' ? 'silent' : env.LOG_LEVEL,
   ...(env.NODE_ENV === 'development'
     ? { transport: { target: 'pino-pretty', options: { colorize: true, translateTime: 'SYS:HH:MM:ss' } } }
     : {}),
