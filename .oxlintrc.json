@@ -1,7 +1,7 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "plugins": ["typescript", "oxc", "node", "promise"],
-  "ignorePatterns": ["dist", "prisma/generated", "coverage"],
+  "ignorePatterns": ["dist", "src/generated", "coverage"],
   "rules": {
     "no-console": "warn",
     "promise/catch-or-return": "off"

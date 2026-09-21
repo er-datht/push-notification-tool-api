@@ -6,7 +6,7 @@ dist
 
 # Prisma generates the client into this folder on `yarn db:generate`.
 # It is derived from schema.prisma, so it is rebuilt, never committed.
-prisma/generated
+src/generated
 
 # Env — real values hold the DB password. Only the example is tracked.
 .env

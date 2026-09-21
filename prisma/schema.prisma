@@ -1,0 +1,24 @@
+// Prisma schema — the single source of truth for the database structure.
+//
+// Workflow for every schema change:
+//   1. edit a model here
+//   2. yarn db:migrate --name <what_changed>   (writes SQL under prisma/migrations/ and applies it)
+//   3. commit schema.prisma AND the new migration folder together
+// Never change tables by hand in TablePro on a shared environment.
+//
+// The connection URL lives in prisma.config.ts (Prisma 7), not here.
+
+generator client {
+  provider = "prisma-client"
+  // Generated under src/ so tsc compiles it into dist/ with the rest of the
+  // app — the server needs it at runtime. Git-ignored; rebuilt from this
+  // schema with `yarn db:generate`.
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+// No models yet. The first one arrives with the first feature, once we know
+// what a push run needs to store.
