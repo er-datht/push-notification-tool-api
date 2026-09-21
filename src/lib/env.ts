@@ -31,7 +31,13 @@ const schema = z.object({
   DATABASE_URL: z.url({ protocol: /^mysql$/ }),
 })
 
-const parsed = schema.safeParse(process.env)
+// `PORT=` in a .env file arrives as "" rather than undefined, which would defeat
+// the defaults above. Treat an empty value as "not set".
+const raw = Object.fromEntries(
+  Object.entries(process.env).map(([k, v]) => [k, v === '' ? undefined : v]),
+)
+
+const parsed = schema.safeParse(raw)
 
 if (!parsed.success) {
   // Written straight to stderr rather than through the logger: the logger's own
