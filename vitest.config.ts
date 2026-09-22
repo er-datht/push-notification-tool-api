@@ -8,5 +8,9 @@ export default defineConfig({
     // Tests that reach the database need MySQL up (docker compose up -d).
     // Generous timeout: the first connection of a run can take a moment.
     testTimeout: 10_000,
+    // Set before any test file is imported, so src/lib/env.ts sees them.
+    env: {
+      API_TOKEN: 'test-token',
+    },
   },
 })
