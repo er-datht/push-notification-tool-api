@@ -17,10 +17,19 @@ import { pinoHttp } from 'pino-http'
 
 import { env } from './lib/env.js'
 import { logger } from './lib/logger.js'
+import { requireApiToken } from './middleware/api-token.js'
 import { errorHandler, notFoundHandler } from './middleware/error-handler.js'
+import { createAutoAppPushRouter } from './modules/auto-app-push/router.js'
 import { healthRouter } from './modules/health/router.js'
 
-export function createApp() {
+export interface AppOptions {
+  /** Source of "now" for every request. Tests pin it; production reads the clock. */
+  clock?: () => Date
+  /** Where delivery files go. Defaults to env.PUSH_FILE_DIR. */
+  fileDir?: string
+}
+
+export function createApp({ clock = () => new Date(), fileDir = env.PUSH_FILE_DIR }: AppOptions = {}) {
   const app = express()
 
   // 1. Security headers on every response, including errors — so it goes first.
@@ -58,8 +67,10 @@ export function createApp() {
   //    the first line of defence against an oversized payload.
   app.use(express.json({ limit: '1mb' }))
 
-  // 5. Routers. One mount per feature module.
+  // 5. Routers. One mount per feature module. /health is open; the API
+  //    routers sit behind the X-APIToken check.
   app.use('/health', healthRouter)
+  app.use('/api/notifications/auto-app-pushes', requireApiToken, createAutoAppPushRouter({ clock, fileDir }))
 
   // 6. Nothing matched -> 404 envelope. 7. Anything thrown -> error envelope.
   //    Both must stay last.
