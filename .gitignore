@@ -4,6 +4,9 @@ node_modules
 # Build output (tsc writes here; only source is committed)
 dist
 
+# Delivery files written by the auto-app-push endpoint in development
+tmp/
+
 # Prisma generates the client into this folder on `yarn db:generate`.
 # It is derived from schema.prisma, so it is rebuilt, never committed.
 src/generated
