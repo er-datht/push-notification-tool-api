@@ -7,6 +7,11 @@
  * configuration mistake surfaces in the first second, not on the first request
  * that happens to need it.
  *
+ * **No defaults.** Every variable must be set, and its value lives only in the
+ * environment (`.env` locally, the platform's own configuration elsewhere).
+ * A fallback here would be a second, invisible place to look for a value, and
+ * would let a forgotten variable ship silently as "whatever the code assumed".
+ *
  * Everything else imports `env` from here. Nothing else touches process.env.
  */
 import { config as loadDotenv } from 'dotenv'
@@ -19,24 +24,26 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 const schema = z.object({
-  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
-  // env values are always strings; coerce turns "8080" into 8080 before checking it.
-  PORT: z.coerce.number().int().positive().default(8080),
-  LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).default('info'),
+  NODE_ENV: z.enum(['development', 'test', 'production']),
+  // env values are always strings; coerce turns the text into a number before
+  // checking it.
+  PORT: z.coerce.number().int().positive(),
+  LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']),
   // "http://a.com,http://b.com" -> ["http://a.com", "http://b.com"]
   CORS_ORIGIN: z
     .string()
-    .default('http://localhost:3000')
+    .min(1)
     .transform((s) => s.split(',').map((o) => o.trim()).filter(Boolean)),
   DATABASE_URL: z.url({ protocol: /^mysql$/ }),
   // Shared secret the FE sends as X-APIToken. Compared in constant time.
   API_TOKEN: z.string().min(1),
   // Where delivery CSV files are written, relative to the process cwd.
-  PUSH_FILE_DIR: z.string().default('tmp/push_test'),
+  PUSH_FILE_DIR: z.string().min(1),
 })
 
-// `PORT=` in a .env file arrives as "" rather than undefined, which would defeat
-// the defaults above. Treat an empty value as "not set".
+// A key with no value in .env (`PORT=`) arrives as "" rather than undefined.
+// Both mean "not set", and the error should say so rather than complain about
+// an empty string.
 const raw = Object.fromEntries(
   Object.entries(process.env).map(([k, v]) => [k, v === '' ? undefined : v]),
 )

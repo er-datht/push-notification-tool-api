@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 docker compose up -d   # MySQL 8 — tests and yarn dev both need it
 yarn install
-yarn dev               # tsx watch, http://localhost:8080
+yarn dev               # tsx watch; the startup log line names the port
 yarn typecheck         # tsc --noEmit
 yarn lint              # oxlint, not eslint
 yarn test              # vitest run — integration tests against the compose MySQL
@@ -47,7 +47,10 @@ surface, mounted once in `app.ts`), and, when it needs them, `service.ts` (logic
 **`src/lib/` is the shared layer, and each file has one owner rule:**
 
 - `env.ts` is the **only** file that reads `process.env`. Everything else imports `env`. A new
-  variable is added to the zod schema there, nowhere else. Empty values (`PORT=`) count as unset.
+  variable is added to the zod schema there, nowhere else. It has **no defaults**: every variable
+  must be set, and its value lives only in `.env` (or the platform's configuration) — never in
+  `.env.example`, this file, the README, or any other committed file. An empty value (`PORT=`)
+  counts as unset and fails at startup, naming the variable.
 - `prisma.ts` is the **only** place `new PrismaClient()` is called. Import `prisma` from it.
 - `errors.ts` owns the response shape for failures. Business code throws `AppError`; it never
   builds an error body by hand and never calls `res.status(4xx)` itself.

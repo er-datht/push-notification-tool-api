@@ -88,7 +88,7 @@ export default defineConfig({
 })
 ```
 
-Local `.env` (git-ignored, not committed): add `API_TOKEN=dev-token`. Without it `yarn dev` and `yarn test` now refuse to start — that is the fail-fast behaviour from `env.ts` doing its job.
+Local `.env` (git-ignored, not committed): add a value for `API_TOKEN`. Without it `yarn dev` and `yarn test` now refuse to start — that is the fail-fast behaviour from `env.ts` doing its job.
 
 Run: `yarn test`
 Expected: the 4 existing health tests still pass.
@@ -2074,11 +2074,11 @@ Expected: all test files pass (health, api-token, error-handler, errors, time, s
 
 - [ ] **Step 6: Try it by hand once**
 
-Run `yarn dev` and, with `API_TOKEN=dev-token` in `.env`:
+Run `yarn dev` and, with `API_TOKEN` set in `.env`:
 
 ```bash
-curl -i -X POST localhost:8080/api/notifications/auto-app-pushes \
-  -H 'Content-Type: application/json' -H 'X-APIToken: dev-token' \
+curl -i -X POST "localhost:$PORT/api/notifications/auto-app-pushes" \
+  -H 'Content-Type: application/json' -H "X-APIToken: $API_TOKEN" \
   -d '{"login_ids":["502001185"],"editions":[{"publish_hour_min":[HH,MM],"deliv_id":"H020064377","title":"テスト","link_type":"03","link_item":"https://eplus.jp/"}]}'
 ```
 
@@ -2120,7 +2120,7 @@ PUSH_FILE_DIR=
 Add to the Environment table:
 
 ```
-| `API_TOKEN` | any string, e.g. `dev-token` | Required. The FE sends it as `X-APIToken`. |
+| `API_TOKEN` | Required. The shared secret the FE sends as `X-APIToken`. |
 | `PUSH_FILE_DIR` | `tmp/push_test` | Where delivery CSV files are written. Default if empty. Git-ignored. |
 ```
 

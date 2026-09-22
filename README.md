@@ -9,16 +9,16 @@ same payload, writes the same delivery file, and records every run in MySQL.
 ## Run
 
 ```bash
-docker compose up -d          # MySQL 8 on 127.0.0.1:3306 (first run pulls the image)
-cp .env.example .env          # then fill in the values below
+cp .env.example .env          # fill in every key — see Environment below
+docker compose up -d          # MySQL 8, using the MYSQL_* values from .env
 yarn install
 yarn db:generate              # build the Prisma client from prisma/schema.prisma
-yarn db:migrate               # apply migrations (none yet — creates _prisma_migrations)
-yarn dev                      # http://localhost:8080, restarts on file change
+yarn db:migrate               # apply migrations
+yarn dev                      # restarts on file change; the log line says the port
 ```
 
 ```bash
-curl -i localhost:8080/health   # {"status":"ok","db":"ok"}
+curl -i "localhost:$PORT/health"   # {"status":"ok","db":"ok"}
 ```
 
 ## Endpoints
@@ -32,7 +32,7 @@ Request body, validation rules and error ids: `docs/superpowers/specs/2026-09-22
 The delivery file matches what the Rails `ecs-api` writes; nothing is uploaded or sent.
 
 ```bash
-curl -i -X POST localhost:8080/api/notifications/auto-app-pushes \
+curl -i -X POST "localhost:$PORT/api/notifications/auto-app-pushes" \
   -H 'Content-Type: application/json' -H "X-APIToken: $API_TOKEN" \
   -d '{"login_ids":["502001185"],"editions":[{"publish_hour_min":[11,30],"deliv_id":"H020064377","title":"テスト","link_type":"03","link_item":"https://eplus.jp/"}]}'
 ```
@@ -41,35 +41,33 @@ curl -i -X POST localhost:8080/api/notifications/auto-app-pushes \
 
 ## Environment
 
-`.env.example` lists every variable; `src/lib/env.ts` validates them at startup and refuses to
-start on a bad one. Values for local development:
+**`.env` is the only place a value belongs.** It is git-ignored; no value is written into this
+file, `.env.example`, `CLAUDE.md`, or any other committed file. `.env.example` is the list of keys
+with empty values, and `src/lib/env.ts` declares and validates them. There are **no defaults**:
+every key must be set, and a missing or malformed one stops the process at startup with the
+variable named.
 
-| Variable | Local value | Notes |
+| Variable | Read by | What it is |
 |---|---|---|
-| `PORT` | `8080` | The FE docs expect the local backend here. Default if empty. |
-| `NODE_ENV` | `development` | Default if empty. |
-| `LOG_LEVEL` | `debug` | pino level. Default `info`. |
-| `CORS_ORIGIN` | `http://localhost:3000` | The FE dev server. Comma-separate for several. |
-| `API_TOKEN` | any string, e.g. `dev-token` | Required. The FE sends it as `X-APIToken`. |
-| `PUSH_FILE_DIR` | `tmp/push_test` | Where delivery CSV files are written. Default if empty. Git-ignored. |
-| `DATABASE_URL` | `mysql://push:push@127.0.0.1:3306/push_notification_tool` | Required. Use `127.0.0.1`, not `localhost` — the MySQL driver may treat `localhost` as a Unix socket, which does not exist for a Docker container. |
-| `MYSQL_ROOT_PASSWORD` | `root` | docker-compose only |
-| `MYSQL_DATABASE` | `push_notification_tool` | docker-compose only; must match `DATABASE_URL` |
-| `MYSQL_USER` | `push` | docker-compose only; must match `DATABASE_URL` |
-| `MYSQL_PASSWORD` | `push` | docker-compose only; must match `DATABASE_URL` |
-| `MYSQL_PORT` | `3306` | docker-compose only |
+| `PORT` | app | Port the server listens on. |
+| `NODE_ENV` | app | `development`, `test` or `production`. |
+| `LOG_LEVEL` | app | pino level: `trace`, `debug`, `info`, `warn`, `error` or `fatal`. |
+| `CORS_ORIGIN` | app | Origin(s) the browser may call from, comma-separated. In development, the FE dev server. |
+| `API_TOKEN` | app | Shared secret the FE sends as `X-APIToken`. Any string locally; on a shared environment, whatever that environment's secret store holds. |
+| `PUSH_FILE_DIR` | app | Directory the delivery CSV files are written to, relative to the process cwd. Git-ignored. |
+| `DATABASE_URL` | app + Prisma CLI | `mysql://<user>:<password>@<host>:<port>/<database>`. Must agree with the `MYSQL_*` values. Use `127.0.0.1` rather than `localhost` — the MySQL driver may read `localhost` as a Unix socket, which a Docker container does not have. |
+| `MYSQL_ROOT_PASSWORD` | docker-compose | Root password for the local container. |
+| `MYSQL_DATABASE` | docker-compose | Database the container creates. |
+| `MYSQL_USER` | docker-compose | Application user the container creates. |
+| `MYSQL_PASSWORD` | docker-compose | That user's password. |
+| `MYSQL_PORT` | docker-compose | Host port the container publishes. |
 
-`.env` is git-ignored. `.env.example` is the list of keys and is committed.
+`yarn test` reads the same `.env`, so it needs every key set too.
 
 ## TablePro
 
-| Field | Value |
-|---|---|
-| Host | `127.0.0.1` |
-| Port | `3306` |
-| User | `push` |
-| Password | `push` |
-| Database | `push_notification_tool` |
+Connect with the `MYSQL_*` values from your own `.env`: host `127.0.0.1`, and the port, user,
+password and database you set there.
 
 After `yarn db:migrate` you will see `push_runs`, `push_editions` and `_prisma_migrations`
 (Prisma's ledger of applied migrations). Do not change tables by hand; edit `prisma/schema.prisma` and run `yarn db:migrate`.

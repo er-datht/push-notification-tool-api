@@ -2,7 +2,7 @@
  * Integration tests: real Express app, real MySQL (docker compose up -d).
  *
  * supertest takes the app object, spins up a throw-away server on a random
- * port for each request and tears it down — nothing here touches port 8080.
+ * port for each request and tears it down — it never binds the app's own port.
  */
 import request from 'supertest'
 import { afterAll, describe, expect, it } from 'vitest'
