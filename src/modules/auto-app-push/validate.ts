@@ -93,20 +93,58 @@ export function validate(body: unknown, now: Date): ValidationResult {
 
 type EditionResult = { ok: true; value: ValidEdition } | { ok: false; errors: FieldError[] }
 
-// Task 6 replaces this stub with the AP-02xx rules.
-function validateEdition(raw: unknown, _index: number, date: string, _now: Date): EditionResult {
+const LINK_TYPES: readonly string[] = ['01', '02', '03']
+const DELIV_ID_MAX = 24
+const MAX_AHEAD_MS = 2 * 60 * 60 * 1000
+const WINDOW_START_MIN = 8 * 60 // 08:00
+const WINDOW_END_MIN = 22 * 60 // 22:00, inclusive
+
+const isHourMin = (v: unknown): v is [number, number] =>
+  Array.isArray(v) &&
+  v.length === 2 &&
+  Number.isInteger(v[0]) &&
+  Number.isInteger(v[1]) &&
+  v[0] >= 0 &&
+  v[0] <= 23 &&
+  v[1] >= 0 &&
+  v[1] <= 59
+
+function validateEdition(raw: unknown, index: number, date: string, now: Date): EditionResult {
   const e = isRecord(raw) ? raw : {}
-  const [hour, minute] = e.publish_hour_min as [number, number]
-  return {
-    ok: true,
-    value: {
-      hour,
-      minute,
-      delivId: String(e.deliv_id),
-      title: String(e.title),
-      linkType: e.link_type as LinkType,
-      linkItem: String(e.link_item),
-      publishAt: tokyoDateTime(date, hour, minute),
-    },
+  const field = (key: string) => `editions[${index}].${key}`
+  const errors: FieldError[] = []
+
+  const delivId = isNonEmptyString(e.deliv_id) ? e.deliv_id.trim() : null
+  if (delivId === null) errors.push(fieldError('AP-0201', field('deliv_id')))
+  else if (delivId.length > DELIV_ID_MAX) errors.push(fieldError('AP-0202', field('deliv_id')))
+
+  const title = isNonEmptyString(e.title) ? e.title.trim() : null
+  if (title === null) errors.push(fieldError('AP-0203', field('title')))
+
+  const linkType = typeof e.link_type === 'string' && LINK_TYPES.includes(e.link_type) ? (e.link_type as LinkType) : null
+  if (linkType === null) errors.push(fieldError('AP-0205', field('link_type')))
+
+  const linkItem = isNonEmptyString(e.link_item) ? e.link_item.trim() : null
+  if (linkItem === null) errors.push(fieldError('AP-0204', field('link_item')))
+  else if (linkType === '01' && !SHOW_ID.test(linkItem)) errors.push(fieldError('AP-0206', field('link_item')))
+
+  // Timing rules only make sense once the pair itself is well-formed.
+  let publishAt: Date | null = null
+  let hour = 0
+  let minute = 0
+  if (!isHourMin(e.publish_hour_min)) {
+    errors.push(fieldError('AP-0207', field('publish_hour_min')))
+  } else {
+    hour = e.publish_hour_min[0]
+    minute = e.publish_hour_min[1]
+    publishAt = tokyoDateTime(date, hour, minute)
+    if (publishAt.getTime() - now.getTime() > MAX_AHEAD_MS) errors.push(fieldError('AP-0208', field('publish_hour_min')))
+    const minutesOfDay = hour * 60 + minute
+    if (minutesOfDay < WINDOW_START_MIN || minutesOfDay > WINDOW_END_MIN) errors.push(fieldError('AP-0209', field('publish_hour_min')))
   }
+
+  if (errors.length > 0 || delivId === null || title === null || linkType === null || linkItem === null || publishAt === null) {
+    return { ok: false, errors }
+  }
+  return { ok: true, value: { hour, minute, delivId, title, linkType, linkItem, publishAt } }
 }
