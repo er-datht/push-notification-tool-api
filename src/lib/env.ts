@@ -29,6 +29,10 @@ const schema = z.object({
     .default('http://localhost:3000')
     .transform((s) => s.split(',').map((o) => o.trim()).filter(Boolean)),
   DATABASE_URL: z.url({ protocol: /^mysql$/ }),
+  // Shared secret the FE sends as X-APIToken. Compared in constant time.
+  API_TOKEN: z.string().min(1),
+  // Where delivery CSV files are written, relative to the process cwd.
+  PUSH_FILE_DIR: z.string().default('tmp/push_test'),
 })
 
 // `PORT=` in a .env file arrives as "" rather than undefined, which would defeat

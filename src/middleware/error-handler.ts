@@ -16,6 +16,7 @@ import type {} from 'pino-http'
 
 import { AppError, internalError, notFound } from '../lib/errors.js'
 import { logger } from '../lib/logger.js'
+import { invalidJson } from '../modules/auto-app-push/errors.js'
 
 /** No route matched. Three parameters: an ordinary middleware. */
 export const notFoundHandler: RequestHandler = (req, _res, next) => {
@@ -23,6 +24,14 @@ export const notFoundHandler: RequestHandler = (req, _res, next) => {
   // through the same logging and shaping as every other failure.
   next(notFound(req.path))
 }
+
+/**
+ * express.json() rejects a body it cannot parse with an error tagged
+ * `type: 'entity.parse.failed'` (from the body-parser package). It is the one
+ * framework error with a contract-defined answer: 400 AP-0003.
+ */
+const isJsonParseError = (err: unknown): boolean =>
+  typeof err === 'object' && err !== null && (err as { type?: unknown }).type === 'entity.parse.failed'
 
 /**
  * Express identifies an error handler by its arity: exactly four parameters,
@@ -36,12 +45,15 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, next) => {
     return
   }
 
-  if (err instanceof AppError) {
+  const appError = err instanceof AppError ? err : isJsonParseError(err) ? invalidJson() : null
+
+  if (appError) {
     // Expected: something the app chose to raise. 4xx is the client's problem
-    // and is logged quietly; 5xx is ours and is logged as an error.
-    const log = err.status >= 500 ? logger.error : logger.info
-    log.call(logger, { req_id: req.id, status: err.status, error_id: err.body.error_id }, err.message)
-    res.status(err.status).json(err.toJSON())
+    // and is logged quietly; 5xx is ours, logged as an error with its cause.
+    const fields = { req_id: req.id, status: appError.status, error_id: appError.body.error_id }
+    if (appError.status >= 500) logger.error({ ...fields, err: appError.cause ?? appError }, appError.message)
+    else logger.info(fields, appError.message)
+    res.status(appError.status).json(appError.toJSON())
     return
   }
 
