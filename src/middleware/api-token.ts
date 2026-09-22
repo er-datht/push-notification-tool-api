@@ -14,15 +14,7 @@ import { timingSafeEqual } from 'node:crypto'
 import type { RequestHandler } from 'express'
 
 import { env } from '../lib/env.js'
-import { AppError } from '../lib/errors.js'
-
-const unauthorized = () =>
-  new AppError(401, {
-    error_id: 'AP-0002',
-    code: 'UNAUTHORIZED',
-    title: 'Unauthorized',
-    message: 'The X-APIToken header is missing or wrong. (AP-0002)',
-  })
+import { unauthorized } from '../modules/auto-app-push/errors.js'
 
 function tokenMatches(given: string | undefined): boolean {
   if (!given) return false

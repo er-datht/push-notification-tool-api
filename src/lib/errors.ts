@@ -49,8 +49,14 @@ export class AppError extends Error {
   readonly status: number
   readonly body: ErrorBody
 
-  constructor(status: number, body: Omit<ErrorBody, 'errors'> & { errors?: FieldError[] }) {
-    super(body.message)
+  constructor(
+    status: number,
+    body: Omit<ErrorBody, 'errors'> & { errors?: FieldError[] },
+    // `cause` is the underlying error (a failed write, a driver error). It is
+    // logged, never sent to the client.
+    options?: { cause?: unknown },
+  ) {
+    super(body.message, options)
     this.name = 'AppError'
     this.status = status
     this.body = { ...body, errors: body.errors ?? [] }
