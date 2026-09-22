@@ -20,5 +20,35 @@ datasource db {
   provider = "mysql"
 }
 
-// No models yet. The first one arrives with the first feature, once we know
-// what a push run needs to store.
+/// One accepted POST /api/notifications/auto-app-pushes.
+model PushRun {
+  id            BigInt        @id @default(autoincrement())
+  /// The `date` of the request (Tokyo calendar date), stored as a DATE.
+  date          DateTime      @db.Date
+  distributeNow Boolean       @map("distribute_now")
+  /// The login_ids as sent. JSON: never queried by element.
+  loginIds      Json          @map("login_ids")
+  createdAt     DateTime      @default(now()) @map("created_at")
+  editions      PushEdition[]
+
+  @@map("push_runs")
+}
+
+/// One edition of a run — one delivery file.
+model PushEdition {
+  id        BigInt   @id @default(autoincrement())
+  runId     BigInt   @map("run_id")
+  run       PushRun  @relation(fields: [runId], references: [id])
+  delivId   String   @map("deliv_id") @db.VarChar(24)
+  title     String   @db.Text
+  linkType  String   @map("link_type") @db.Char(2)
+  linkItem  String   @map("link_item") @db.VarChar(255)
+  /// The delivery instant, UTC. Tokyo wall-clock time is derived on read.
+  publishAt DateTime @map("publish_at")
+  /// Path of the delivery file relative to PUSH_FILE_DIR.
+  filePath  String   @map("file_path") @db.VarChar(255)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([runId])
+  @@map("push_editions")
+}
