@@ -1,18 +1,24 @@
 /**
- * Asia/Tokyo without a timezone library.
+ * Asia/Tokyo conversions, on date-fns + @date-fns/tz.
  *
- * Japan has no daylight-saving time, so Tokyo is always UTC+9. That turns
- * every conversion into "shift by nine hours and read the UTC fields", which
- * is exact and needs no tz database. The FE does the same (todayInTokyo,
- * tokyoEpoch in fe-push-notification-tool/src/lib/types.ts).
+ * Two directions:
+ *   - Tokyo wall-clock time -> instant:  new TZDate(y, m, d, h, min, ZONE)
+ *   - instant -> Tokyo strings:           format(instant, pattern, { in: tz(ZONE) })
  *
  * Everything returned as a Date is a real instant (UTC inside); everything
- * returned as a string is Tokyo wall-clock time.
+ * returned as a string is Tokyo wall-clock time. The zone is one constant, so
+ * a different business timezone is a one-line change.
  */
+import { TZDate, tz } from '@date-fns/tz'
+import { format, isValid, parse } from 'date-fns'
 
-const OFFSET_MS = 9 * 60 * 60 * 1000
+import { BUSINESS_TIMEZONE } from '../../lib/env.js'
 
-const DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/
+const ZONE = BUSINESS_TIMEZONE
+const inZone = { in: tz(ZONE) }
+
+/** The contract's date shape. date-fns' parse alone would accept "2026-9-2". */
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 
 export interface CalendarDate {
   year: number
@@ -22,44 +28,32 @@ export interface CalendarDate {
 
 /** Strict YYYY-MM-DD that also exists on the calendar (no 2026-02-30). */
 export function parseCalendarDate(s: string): CalendarDate | null {
-  const m = DATE_RE.exec(s)
-  if (!m) return null
-  const year = Number(m[1])
-  const month = Number(m[2])
-  const day = Number(m[3])
-  // Date.UTC normalises overflow (Feb 30 -> Mar 2); reading the fields back
-  // tells us whether anything moved.
-  const d = new Date(Date.UTC(year, month - 1, day))
-  if (d.getUTCFullYear() !== year || d.getUTCMonth() !== month - 1 || d.getUTCDate() !== day) return null
-  return { year, month, day }
+  if (!DATE_RE.test(s)) return null
+  const d = parse(s, 'yyyy-MM-dd', new Date(0))
+  if (!isValid(d)) return null
+  return { year: d.getFullYear(), month: d.getMonth() + 1, day: d.getDate() }
 }
-
-/** A Date whose UTC fields read as Tokyo wall-clock time for `instant`. */
-const asTokyoWallClock = (instant: Date): Date => new Date(instant.getTime() + OFFSET_MS)
-
-const pad2 = (n: number): string => String(n).padStart(2, '0')
 
 /** The instant at `hour:minute` Tokyo time on `date` (YYYY-MM-DD). */
 export function tokyoDateTime(date: string, hour: number, minute: number): Date {
   const d = parseCalendarDate(date)
   if (!d) throw new Error(`not a calendar date: ${date}`)
-  return new Date(Date.UTC(d.year, d.month - 1, d.day, hour, minute) - OFFSET_MS)
+  // TZDate is a Date subclass that prints with its zone; hand back a plain
+  // Date so the rest of the app only ever sees an instant.
+  return new Date(new TZDate(d.year, d.month - 1, d.day, hour, minute, ZONE).getTime())
 }
 
 /** Today's date in Tokyo as YYYY-MM-DD. */
 export function todayInTokyo(now: Date): string {
-  const w = asTokyoWallClock(now)
-  return `${w.getUTCFullYear()}-${pad2(w.getUTCMonth() + 1)}-${pad2(w.getUTCDate())}`
+  return format(now, 'yyyy-MM-dd', inZone)
 }
 
 /** YYYYMMDD in Tokyo — the delivery-file directory name. */
 export function formatTokyoDate(instant: Date): string {
-  const w = asTokyoWallClock(instant)
-  return `${w.getUTCFullYear()}${pad2(w.getUTCMonth() + 1)}${pad2(w.getUTCDate())}`
+  return format(instant, 'yyyyMMdd', inZone)
 }
 
 /** YYYYMMDDHHMMSS in Tokyo — the delivery-file name prefix. */
 export function formatTokyoDateTime(instant: Date): string {
-  const w = asTokyoWallClock(instant)
-  return `${formatTokyoDate(instant)}${pad2(w.getUTCHours())}${pad2(w.getUTCMinutes())}${pad2(w.getUTCSeconds())}`
+  return format(instant, 'yyyyMMddHHmmss', inZone)
 }
