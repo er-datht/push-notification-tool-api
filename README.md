@@ -3,8 +3,8 @@
 Backend for the Push Notification Tool. Express 5 + Prisma 7 + MySQL 8, TypeScript.
 
 It is the `express` dispatch target the FE console (`fe-push-notification-tool`) lists as
-"not ready yet", and will take over the auto-app-push path from the Rails `ecs-api`. Right now
-it is a scaffold: `GET /health` and the plumbing every future endpoint will use.
+"not ready yet", and takes over the auto-app-push path from the Rails `ecs-api`: it validates the
+same payload, writes the same delivery file, and records every run in MySQL.
 
 ## Run
 
@@ -21,6 +21,24 @@ yarn dev                      # http://localhost:8080, restarts on file change
 curl -i localhost:8080/health   # {"status":"ok","db":"ok"}
 ```
 
+## Endpoints
+
+| Method | Path | Auth | Purpose |
+|---|---|---|---|
+| `GET` | `/health` | none | process + database check |
+| `POST` | `/api/notifications/auto-app-pushes` | `X-APIToken` | validate an auto-app-push request, write one delivery CSV per edition under `PUSH_FILE_DIR`, record the run in `push_runs` / `push_editions`; `201` with no body |
+
+Request body, validation rules and error ids: `docs/superpowers/specs/2026-09-22-auto-app-push-design.md`.
+The delivery file matches what the Rails `ecs-api` writes; nothing is uploaded or sent.
+
+```bash
+curl -i -X POST localhost:8080/api/notifications/auto-app-pushes \
+  -H 'Content-Type: application/json' -H "X-APIToken: $API_TOKEN" \
+  -d '{"login_ids":["502001185"],"editions":[{"publish_hour_min":[11,30],"deliv_id":"H020064377","title":"テスト","link_type":"03","link_item":"https://eplus.jp/"}]}'
+```
+
+(`publish_hour_min` must be a Tokyo time between 08:00 and 22:00 and no more than 2 hours ahead.)
+
 ## Environment
 
 `.env.example` lists every variable; `src/lib/env.ts` validates them at startup and refuses to
@@ -32,6 +50,8 @@ start on a bad one. Values for local development:
 | `NODE_ENV` | `development` | Default if empty. |
 | `LOG_LEVEL` | `debug` | pino level. Default `info`. |
 | `CORS_ORIGIN` | `http://localhost:3000` | The FE dev server. Comma-separate for several. |
+| `API_TOKEN` | any string, e.g. `dev-token` | Required. The FE sends it as `X-APIToken`. |
+| `PUSH_FILE_DIR` | `tmp/push_test` | Where delivery CSV files are written. Default if empty. Git-ignored. |
 | `DATABASE_URL` | `mysql://push:push@127.0.0.1:3306/push_notification_tool` | Required. Use `127.0.0.1`, not `localhost` — the MySQL driver may treat `localhost` as a Unix socket, which does not exist for a Docker container. |
 | `MYSQL_ROOT_PASSWORD` | `root` | docker-compose only |
 | `MYSQL_DATABASE` | `push_notification_tool` | docker-compose only; must match `DATABASE_URL` |
@@ -51,8 +71,8 @@ start on a bad one. Values for local development:
 | Password | `push` |
 | Database | `push_notification_tool` |
 
-After `yarn db:migrate` the only table is `_prisma_migrations`, Prisma's ledger of applied
-migrations. Do not change tables by hand; edit `prisma/schema.prisma` and run `yarn db:migrate`.
+After `yarn db:migrate` you will see `push_runs`, `push_editions` and `_prisma_migrations`
+(Prisma's ledger of applied migrations). Do not change tables by hand; edit `prisma/schema.prisma` and run `yarn db:migrate`.
 
 ## Scripts
 
@@ -88,10 +108,13 @@ src/
   lib/prisma.ts             the only PrismaClient
   lib/errors.ts             AppError + the shared error envelope
   lib/logger.ts             pino
+  middleware/api-token.ts   X-APIToken check (constant-time)
   middleware/error-handler.ts   404 + thrown errors -> envelope
-  modules/health/           first feature module: router.ts + router.test.ts
+  modules/health/           GET /health
+  modules/auto-app-push/    schema · validate · time · csv · service · router (+ tests)
   generated/prisma/         Prisma client (generated, git-ignored)
-prisma/schema.prisma        models (none yet) — the source of truth for the DB
+prisma/schema.prisma        PushRun, PushEdition — the source of truth for the DB
+prisma/migrations/          generated SQL, committed with the schema
 prisma.config.ts            Prisma 7 CLI config (reads DATABASE_URL)
 docker-compose.yml          MySQL 8 for local development
 ```
