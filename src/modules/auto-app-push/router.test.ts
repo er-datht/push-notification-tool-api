@@ -1,6 +1,6 @@
 /**
  * The HTTP surface, end to end: real app (createApp with a fixed clock and a
- * temp dir), real MySQL, real files. Token is 'test-token' (vitest.config.ts).
+ * temp dir), real MySQL, real files. Token is TEST_API_TOKEN (vitest.config.ts).
  */
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -11,6 +11,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { createApp } from '../../app.js'
 import { prisma } from '../../lib/prisma.js'
+import { TEST_API_TOKEN } from '../../test/fixtures.js'
 
 const PATH = '/api/notifications/auto-app-pushes'
 const NOW = new Date('2026-09-22T01:00:00Z') // 10:00 Tokyo
@@ -39,7 +40,7 @@ afterEach(async () => {
 afterAll(() => prisma.$disconnect())
 
 const app = () => createApp({ clock: () => NOW, fileDir })
-const post = () => request(app()).post(PATH).set('X-APIToken', 'test-token')
+const post = () => request(app()).post(PATH).set('X-APIToken', TEST_API_TOKEN)
 
 describe(`POST ${PATH}: auth`, () => {
   it('401 AP-0002 without a token', async () => {
