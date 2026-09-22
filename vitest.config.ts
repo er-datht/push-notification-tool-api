@@ -10,6 +10,10 @@ export default defineConfig({
     // Tests that reach the database need MySQL up (docker compose up -d).
     // Generous timeout: the first connection of a run can take a moment.
     testTimeout: 10_000,
+    // Integration test files share one MySQL database and truncate its tables
+    // in afterEach. Run files one at a time so they cannot delete each other's
+    // rows mid-assertion. Tests inside a file already run sequentially.
+    fileParallelism: false,
     // Set before any test file is imported, so src/lib/env.ts sees them.
     env: {
       API_TOKEN: TEST_API_TOKEN,
