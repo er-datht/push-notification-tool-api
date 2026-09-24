@@ -16,6 +16,10 @@ src/generated
 .env.*
 !.env.example
 
+# Docs — local notes stay out of the repo; the superpowers specs/plans are tracked
+docs/*
+!docs/superpowers/
+
 # Logs
 logs
 *.log

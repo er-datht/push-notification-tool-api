@@ -90,7 +90,13 @@ export const unknownParameters = (keys: string[]) =>
     })),
   })
 
-/** 500 — validation passed but the file or the database write failed. */
+/**
+ * 500 — validation passed but a step this process fully controls (the local
+ * file write, the database write) failed. AP-0005 covers both; a step only
+ * gets its own id, like AP-0006 below, when it calls an external dependency
+ * whose failure mode is operationally distinct — retriable, vendor-side,
+ * worth telling apart in logs and alerts from "this box's disk/DB is broken".
+ */
 export const creationFailed = (cause: unknown) =>
   new AppError(
     500,
@@ -99,6 +105,19 @@ export const creationFailed = (cause: unknown) =>
       code: 'INTERNAL_ERROR',
       title: 'Internal error',
       message: 'The request was valid but the push could not be created. (AP-0005)',
+    },
+    { cause },
+  )
+
+/** 500 — the local write succeeded but the S3 upload (an external dependency) failed. */
+export const s3UploadFailed = (cause: unknown) =>
+  new AppError(
+    500,
+    {
+      error_id: 'AP-0006',
+      code: 'INTERNAL_ERROR',
+      title: 'Internal error',
+      message: 'The delivery file could not be uploaded to S3. (AP-0006)',
     },
     { cause },
   )

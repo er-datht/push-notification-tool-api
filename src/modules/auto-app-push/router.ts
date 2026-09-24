@@ -19,13 +19,15 @@ export interface AutoAppPushRouterDeps {
   clock: () => Date
   /** PUSH_FILE_DIR. */
   fileDir: string
+  /** Uploads one delivery file's content to S3. */
+  uploadToS3: (key: string, content: string) => Promise<void>
 }
 
-export function createAutoAppPushRouter({ clock, fileDir }: AutoAppPushRouterDeps) {
+export function createAutoAppPushRouter({ clock, fileDir, uploadToS3 }: AutoAppPushRouterDeps) {
   const router = Router()
 
   router.post('/', async (req, res) => {
-    await createAutoAppPush(req.body, { now: clock(), fileDir })
+    await createAutoAppPush(req.body, { now: clock(), fileDir, uploadToS3 })
     // Empty on purpose: the contract says success has no body, and the FE
     // branches on res.ok without reading one.
     res.status(201).end()

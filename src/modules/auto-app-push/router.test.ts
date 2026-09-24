@@ -11,7 +11,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { createApp } from '../../app.js'
 import { prisma } from '../../lib/prisma.js'
-import { TEST_API_TOKEN } from '../../test/fixtures.js'
+import { noopUploadToS3, TEST_API_TOKEN } from '../../test/fixtures.js'
 
 const PATH = '/api/notifications/auto-app-pushes'
 const NOW = new Date('2026-09-22T01:00:00Z') // 10:00 Tokyo
@@ -26,6 +26,7 @@ const edition = {
 const body = () => ({ date: '2026-09-22', login_ids: ['502001185', '602028303'], editions: [edition], distribute_now: false })
 
 let fileDir: string
+const uploadToS3 = noopUploadToS3
 
 beforeEach(async () => {
   fileDir = await mkdtemp(path.join(tmpdir(), 'push-test-'))
@@ -39,7 +40,7 @@ afterEach(async () => {
 
 afterAll(() => prisma.$disconnect())
 
-const app = () => createApp({ clock: () => NOW, fileDir })
+const app = () => createApp({ clock: () => NOW, fileDir, uploadToS3 })
 const post = () => request(app()).post(PATH).set('X-APIToken', TEST_API_TOKEN)
 
 describe(`POST ${PATH}: auth`, () => {
