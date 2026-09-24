@@ -15,8 +15,12 @@ export default defineConfig({
     // rows mid-assertion. Tests inside a file already run sequentially.
     fileParallelism: false,
     // Set before any test file is imported, so src/lib/env.ts sees them.
+    // AWS_REGION/S3_BUCKET_NAME only need to be non-empty here: every test injects
+    // a fake uploadToS3, so nothing ever calls real AWS with these values.
     env: {
       API_TOKEN: TEST_API_TOKEN,
+      AWS_REGION: 'ap-northeast-1',
+      S3_BUCKET_NAME: 'test-bucket',
     },
   },
 })

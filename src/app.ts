@@ -17,6 +17,7 @@ import { pinoHttp } from 'pino-http'
 
 import { env } from './lib/env.js'
 import { logger } from './lib/logger.js'
+import { uploadCsvToS3 } from './lib/s3.js'
 import { requireApiToken } from './middleware/api-token.js'
 import { errorHandler, notFoundHandler } from './middleware/error-handler.js'
 import { createAutoAppPushRouter } from './modules/auto-app-push/router.js'
@@ -27,9 +28,15 @@ export interface AppOptions {
   clock?: () => Date
   /** Where delivery files go. Defaults to env.PUSH_FILE_DIR. */
   fileDir?: string
+  /** Uploads one delivery file's content to S3. Defaults to the real upload. */
+  uploadToS3?: (key: string, content: string) => Promise<void>
 }
 
-export function createApp({ clock = () => new Date(), fileDir = env.PUSH_FILE_DIR }: AppOptions = {}) {
+export function createApp({
+  clock = () => new Date(),
+  fileDir = env.PUSH_FILE_DIR,
+  uploadToS3 = uploadCsvToS3,
+}: AppOptions = {}) {
   const app = express()
 
   // 1. Security headers on every response, including errors — so it goes first.
@@ -70,7 +77,7 @@ export function createApp({ clock = () => new Date(), fileDir = env.PUSH_FILE_DI
   // 5. Routers. One mount per feature module. /health is open; the API
   //    routers sit behind the X-APIToken check.
   app.use('/health', healthRouter)
-  app.use('/api/notifications/auto-app-pushes', requireApiToken, createAutoAppPushRouter({ clock, fileDir }))
+  app.use('/api/notifications/auto-app-pushes', requireApiToken, createAutoAppPushRouter({ clock, fileDir, uploadToS3 }))
 
   // 6. Nothing matched -> 404 envelope. 7. Anything thrown -> error envelope.
   //    Both must stay last.

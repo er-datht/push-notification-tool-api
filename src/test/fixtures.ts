@@ -9,3 +9,6 @@
  * makes sure nobody mistakes it for a value to configure anywhere real.
  */
 export const TEST_API_TOKEN = 'vitest-only-not-a-real-token'
+
+/** A no-op `uploadToS3` so tests never touch real AWS. */
+export const noopUploadToS3 = async () => {}

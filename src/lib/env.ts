@@ -39,6 +39,13 @@ const schema = z.object({
   API_TOKEN: z.string().min(1),
   // Where delivery CSV files are written, relative to the process cwd.
   PUSH_FILE_DIR: z.string().min(1),
+  // Region and bucket the delivery CSV is also uploaded to. Credentials are
+  // not declared here: the AWS SDK's own default provider chain finds them
+  // (AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY in the environment, a shared
+  // ~/.aws/credentials file, or an IAM role) — that is the SDK's config, not
+  // this app's.
+  AWS_REGION: z.string().min(1),
+  S3_BUCKET_NAME: z.string().min(1),
 })
 
 // A key with no value in .env (`PORT=`) arrives as "" rather than undefined.
