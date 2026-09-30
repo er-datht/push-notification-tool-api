@@ -12,7 +12,7 @@
 import { TZDate, tz } from '@date-fns/tz'
 import { format, isValid, parse } from 'date-fns'
 
-import { BUSINESS_TIMEZONE } from '../../lib/env.js'
+import { BUSINESS_TIMEZONE } from './env.js'
 
 const ZONE = BUSINESS_TIMEZONE
 const inZone = { in: tz(ZONE) }
@@ -56,4 +56,9 @@ export function formatTokyoDate(instant: Date): string {
 /** YYYYMMDDHHMMSS in Tokyo — the delivery-file name prefix. */
 export function formatTokyoDateTime(instant: Date): string {
   return format(instant, 'yyyyMMddHHmmss', inZone)
+}
+
+/** ISO 8601 in Tokyo with its offset, e.g. 2026-09-29T17:00:00+09:00 — how a response names a time. */
+export function formatTokyoIso(instant: Date): string {
+  return format(instant, "yyyy-MM-dd'T'HH:mm:ssxxx", inZone)
 }

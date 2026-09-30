@@ -27,9 +27,12 @@ curl -i "localhost:$PORT/health"   # {"status":"ok","db":"ok"}
 |---|---|---|---|
 | `GET` | `/health` | none | process + database check |
 | `POST` | `/api/notifications/auto-app-pushes` | `X-APIToken` | validate an auto-app-push request, write one delivery CSV per edition under `PUSH_FILE_DIR`, record the run in `push_runs` / `push_editions`; `201` with no body |
+| `POST` | `/api/notifications/normal-pushes` | `X-APIToken` | validate a normal-push request (ecs-api's contract) and record the run in `normal_push_runs` / `normal_push_editions` / `normal_push_shows` — no delivery file is written, no downstream system is called; `201` with the created editions |
 
-Request body, validation rules and error ids: `docs/superpowers/specs/2026-09-22-auto-app-push-design.md`.
-The delivery file matches what the Rails `ecs-api` writes; nothing is uploaded or sent.
+Request body, validation rules and error ids: `docs/superpowers/specs/2026-09-22-auto-app-push-design.md`
+and `docs/superpowers/specs/2026-09-28-normal-push-design.md`.
+The auto-app-push delivery file matches what the Rails `ecs-api` writes; nothing is uploaded or sent.
+normal-push writes no file at all — see "Out of scope" in its design doc.
 
 ```bash
 curl -i -X POST "localhost:$PORT/api/notifications/auto-app-pushes" \
@@ -38,6 +41,20 @@ curl -i -X POST "localhost:$PORT/api/notifications/auto-app-pushes" \
 ```
 
 (`publish_hour_min` must be a Tokyo time between 08:00 and 22:00 and no more than 2 hours ahead.)
+
+```bash
+curl -i -X POST "localhost:$PORT/api/notifications/normal-pushes" \
+  -H 'Content-Type: application/json' -H "X-APIToken: $API_TOKEN" \
+  -d '{"editions":[{"publish_hour_min":[17,0],"shows":[{"code":"9014500001-P0030056","performer_id":2762,"hook":"firstcome"},{"code":"9014500001-P0030065","performer_id":2762,"hook":"preorder"}]}]}'
+```
+
+```json
+{"editions":[{"id":1,"period_start":"2026-09-30T17:00:00+09:00","period_end":"2026-09-30T18:00:00+09:00","status":"edited","topics_count":2}]}
+```
+
+(`publish_hour_min` starts a one-hour window between 08:00 and 21:00 Tokyo; a start in the past is
+fine and there is no 2-hour cap. There is no `login_ids` — sending it is `400 NP-0004`. Sending the
+same hour again is `422 NP-0208`. The full contract is the FE's `docs/API-DOC-normal-push.md`.)
 
 ## Environment
 
@@ -69,8 +86,9 @@ variable named.
 Connect with the `MYSQL_*` values from your own `.env`: host `127.0.0.1`, and the port, user,
 password and database you set there.
 
-After `yarn db:migrate` you will see `push_runs`, `push_editions` and `_prisma_migrations`
-(Prisma's ledger of applied migrations). Do not change tables by hand; edit `prisma/schema.prisma` and run `yarn db:migrate`.
+After `yarn db:migrate` you will see `push_runs`, `push_editions`, `normal_push_runs`,
+`normal_push_editions`, `normal_push_shows` and `_prisma_migrations` (Prisma's ledger of applied migrations).
+Do not change tables by hand; edit `prisma/schema.prisma` and run `yarn db:migrate`.
 
 ## Scripts
 
@@ -106,12 +124,14 @@ src/
   lib/prisma.ts             the only PrismaClient
   lib/errors.ts             AppError + the shared error envelope
   lib/logger.ts             pino
+  lib/time.ts               Asia/Tokyo conversions, shared across push-type modules
   middleware/api-token.ts   X-APIToken check (constant-time)
   middleware/error-handler.ts   404 + thrown errors -> envelope
   modules/health/           GET /health
-  modules/auto-app-push/    schema · validate · time · csv · service · router (+ tests)
+  modules/auto-app-push/    schema · validate · csv · service · router (+ tests)
+  modules/normal-push/      schema · validate · service · router (+ tests) — no csv.ts, no file writing
   generated/prisma/         Prisma client (generated, git-ignored)
-prisma/schema.prisma        PushRun, PushEdition — the source of truth for the DB
+prisma/schema.prisma        PushRun/PushEdition, NormalPushRun/Edition/Show — the source of truth for the DB
 prisma/migrations/          generated SQL, committed with the schema
 prisma.config.ts            Prisma 7 CLI config (reads DATABASE_URL)
 docker-compose.yml          MySQL 8 for local development
