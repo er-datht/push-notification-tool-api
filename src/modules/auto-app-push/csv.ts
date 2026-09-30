@@ -13,7 +13,7 @@
  *
  * Pure: returns the path and the bytes; service.ts does the writing.
  */
-import { formatTokyoDate, formatTokyoDateTime } from './time.js'
+import { formatTokyoDate, formatTokyoDateTime } from '../../lib/time.js'
 import { SHOW_ID, type ValidEdition } from './validate.js'
 
 export interface DeliveryFile {

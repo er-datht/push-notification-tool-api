@@ -12,7 +12,7 @@
  */
 import type { FieldError } from '../../lib/errors.js'
 import { fieldError } from './errors.js'
-import { parseCalendarDate, todayInTokyo, tokyoDateTime } from './time.js'
+import { parseCalendarDate, todayInTokyo, tokyoDateTime } from '../../lib/time.js'
 
 export type LinkType = '01' | '02' | '03'
 
