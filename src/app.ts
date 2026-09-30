@@ -21,6 +21,7 @@ import { requireApiToken } from './middleware/api-token.js'
 import { errorHandler, notFoundHandler } from './middleware/error-handler.js'
 import { createAutoAppPushRouter } from './modules/auto-app-push/router.js'
 import { healthRouter } from './modules/health/router.js'
+import { createNormalPushRouter } from './modules/normal-push/router.js'
 
 export interface AppOptions {
   /** Source of "now" for every request. Tests pin it; production reads the clock. */
@@ -71,6 +72,7 @@ export function createApp({ clock = () => new Date(), fileDir = env.PUSH_FILE_DI
   //    routers sit behind the X-APIToken check.
   app.use('/health', healthRouter)
   app.use('/api/notifications/auto-app-pushes', requireApiToken, createAutoAppPushRouter({ clock, fileDir }))
+  app.use('/api/notifications/normal-pushes', requireApiToken, createNormalPushRouter({ clock }))
 
   // 6. Nothing matched -> 404 envelope. 7. Anything thrown -> error envelope.
   //    Both must stay last.

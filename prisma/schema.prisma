@@ -52,3 +52,48 @@ model PushEdition {
   @@index([runId])
   @@map("push_editions")
 }
+
+/// One accepted POST /api/notifications/normal-pushes. No delivery file is written for this
+/// type — real delivery, if any, happens entirely outside this service (ecs-api's own
+/// create_topics_edition path). This model is persistence only.
+model NormalPushRun {
+  id            BigInt              @id @default(autoincrement())
+  /// The `date` of the request (Tokyo calendar date), stored as a DATE.
+  date          DateTime            @db.Date
+  distributeNow Boolean             @map("distribute_now")
+  createdAt     DateTime            @default(now()) @map("created_at")
+  editions      NormalPushEdition[]
+
+  @@map("normal_push_runs")
+}
+
+/// One edition (one notification) of a normal-push run: a one-hour window holding 1+ shows.
+model NormalPushEdition {
+  id        BigInt           @id @default(autoincrement())
+  runId     BigInt           @map("run_id")
+  run       NormalPushRun    @relation(fields: [runId], references: [id])
+  /// The start of the one-hour window, UTC. Tokyo wall-clock time is derived on read.
+  publishAt DateTime         @map("publish_at")
+  createdAt DateTime         @default(now()) @map("created_at")
+  shows     NormalPushShow[]
+
+  @@index([runId])
+  /// The overlap check (NP-0208) looks editions up by window start.
+  @@index([publishAt])
+  @@map("normal_push_editions")
+}
+
+/// One show inside an edition, as sent: `{ code, performer_id, hook }`.
+model NormalPushShow {
+  id          BigInt            @id @default(autoincrement())
+  editionId   BigInt            @map("edition_id")
+  edition     NormalPushEdition @relation(fields: [editionId], references: [id])
+  code        String            @db.VarChar(64)
+  /// The ワード id. Up to 16 digits, so it does not fit INT.
+  performerId BigInt            @map("performer_id")
+  hook        String            @db.VarChar(16)
+  createdAt   DateTime          @default(now()) @map("created_at")
+
+  @@index([editionId])
+  @@map("normal_push_shows")
+}

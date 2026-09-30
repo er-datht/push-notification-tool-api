@@ -24,16 +24,20 @@ Use yarn (1.22.22). Versions in `package.json` are exact, no `^`. `package-lock.
 The backend the FE console (`../fe-push-notification-tool`) calls when its dispatch target is
 `express`. It replaces the Rails `ecs-api` path for push-notification test runs.
 
-Endpoints: `GET /health` (open) and `POST /api/notifications/auto-app-pushes` (behind
-`requireApiToken`). The path follows the naming rules rather than the Rails path the contract
-document shows; the response rules and `AP-xxxx` ids of that document still apply.
+Endpoints: `GET /health` (open), `POST /api/notifications/auto-app-pushes` and
+`POST /api/notifications/normal-pushes` (both behind `requireApiToken`). The paths follow the
+naming rules rather than the Rails paths the contract documents show; the response rules and
+error ids of those documents still apply.
 
-Two documents in the FE repo are binding for any endpoint added here:
+These documents are binding for the endpoints here:
 
-- `../fe-push-notification-tool/docs/API-DOC-auto-app-push.md` — the contract the FE is built
-  against: `X-APIToken` header, request body, the `AP-xxxx` error ids, and the response rules
-  (`201` with **no body**; failures in the shared error envelope; `422` for validation, `400` for an
-  unreadable body or an unknown key, `401` with a body, `404` empty).
+- `../fe-push-notification-tool/docs/API-DOC-auto-app-push.md` — the auto-app-push contract the FE
+  is built against: `X-APIToken` header, request body, the `AP-xxxx` error ids, and the response
+  rules (`201` with **no body**; failures in the shared error envelope; `422` for validation, `400`
+  for an unreadable body or an unknown key, `401` with a body, `404` empty).
+- `../fe-push-notification-tool/docs/API-DOC-normal-push.md` — the normal-push contract (ecs-api's):
+  `editions[].shows[]` of `{ code, performer_id, hook }`, **no `login_ids`**, the `NP-xxxx` ids, and a
+  `201` that lists the created editions.
 - `../API naming convention rules.pdf` — property names `snake_case`, endpoints `kebab-case`
   and plural, one identifier called `id`, booleans not `"0"`/`"1"`, no romanised Japanese.
 
@@ -80,11 +84,20 @@ Every failure leaves the server as
 That is the shared error envelope the FE already parses (`fe-push-notification-tool/src/lib/api.ts`).
 `errors[].field` is the dotted path of the input (`editions[0].deliv_id`) or `null`. Framework
 ids use the `CM-` prefix (`CM-0404`, `CM-0500`); feature ids keep the prefix the contract gives
-them (`AP-` for auto-app-push). The FE keys its wording off `error_id`, so ids are stable and
-message text is not a contract.
+them (`AP-` for auto-app-push, `NP-` for normal-push — ecs-api's own ids, so the FE reads both
+servers the same way). The FE keys its wording off `error_id`, so ids
+are stable and message text is not a contract.
 
 Unknown errors become a `CM-0500` with a generic message; the stack goes to the log only.
 An `AppError` can carry `{ cause }`; the error handler logs the cause on 5xx and never sends it.
+
+**A real coupling, not yet fixed:** `requireApiToken` and `error-handler.ts` import their 401
+and bad-JSON-400 builders (`unauthorized()`, `invalidJson()`) from `auto-app-push/errors.ts`
+specifically, and that's global middleware — so every route mounted behind it, including
+`normal-push`, currently answers those two cases with `AP-0002`/`AP-0003`, not its own prefix.
+Fixing this (extracting both into `src/lib/errors.ts` under new `CM-04xx` ids) changes
+auto-app-push's already-shipped wire contract, so it needs its own sign-off rather than being
+folded into whichever feature branch next notices it.
 
 ## The auto-app-push module
 
@@ -96,9 +109,6 @@ and built with `docs/superpowers/plans/2026-09-22-auto-app-push.md`:
 - `validate.ts` is the rule table: `validate(body, now)` returns every `AP-01xx`/`AP-02xx`
   problem at once, or the normalised `ValidInput`. It never throws and never reads the clock —
   `now` is a parameter. Add a rule = add a row to the spec table, a test, then the check.
-- `time.ts` is Asia/Tokyo on date-fns + `@date-fns/tz` (`TZDate`, `format(..., { in: tz(ZONE) })`).
-  The zone is `BUSINESS_TIMEZONE` from `env.ts`. `parseCalendarDate` keeps its own regex because
-  date-fns' `parse` accepts `2026-9-2`.
 - `csv.ts` builds the delivery file byte-for-byte like Rails `common.rb`
   (`force_quotes`, `""` escaping, `\n`). Change it only against that file.
 - `service.ts` is the only place with I/O: unknown keys → validate → write files → one nested
@@ -107,10 +117,48 @@ and built with `docs/superpowers/plans/2026-09-22-auto-app-push.md`:
   directory; tests pin both.
 
 The `AP-xxxx` catalogue and the envelope builders live in the module's `errors.ts`; the
-error handler and `requireApiToken` import from there.
+error handler and `requireApiToken` import from there (see the coupling note above).
+
+Asia/Tokyo time helpers used to live here as `time.ts` but had no auto-app-push-specific logic,
+so they moved to `src/lib/time.ts` when `normal-push` was added — date-fns + `@date-fns/tz`
+(`TZDate`, `format(..., { in: tz(ZONE) })`), zone `BUSINESS_TIMEZONE` from `env.ts`.
+`parseCalendarDate` keeps its own regex because date-fns' `parse` accepts `2026-9-2`.
+
+## The normal-push module
+
+`src/modules/normal-push/`, designed in `docs/superpowers/specs/2026-09-28-normal-push-design.md`:
+
+It implements ecs-api's normal push contract (`../fe-push-notification-tool/docs/API-DOC-normal-push.md`):
+`{ date?, editions: [{ publish_hour_min, shows: [{ code, performer_id, hook }] }], distribute_now? }`.
+
+- `schema.ts` only answers "which keys are unknown?" (→ `400 NP-0004`), at all three levels —
+  top, edition, show. `login_ids` is not a key, so sending it is a 400, like ecs-api.
+- `validate.ts` is the rule table: `validate(body, now)` returns every `NP-01xx`/`NP-02xx`
+  problem at once, or the normalised `ValidInput`. `publish_hour_min` starts a **one-hour
+  window**: it must start between 08:00 and 21:00, a start in the past is fine, and there is no
+  lead-time cap. `hook` is `preorder` or `firstcome` only (a mixed push is two shows with
+  different hooks). `performer_id` is a positive safe integer of at most 16 digits, kept as a
+  `bigint`. Two editions in the same request less than an hour apart are `NP-0208`.
+- `service.ts` is the only place with I/O: unknown keys → validate → overlap against editions
+  already in the database (`NP-0208`, a start within ±60 min) → one nested
+  `prisma.normalPushRun.create` (run → editions → shows). **No file-writing step, no delivery** —
+  a `201` means "validated and recorded"; real delivery is ecs-api's job. It returns ecs-api's
+  `201` body: `{ editions: [{ id, period_start, period_end, status: "edited", topics_count }] }`,
+  with `+09:00` ISO times (`formatTokyoIso`) and `topics_count` = the number of shows (this service
+  does not expand a code into its performances). Failures after validation are `500 NP-0005` with
+  `cause`.
+- `router.ts` — `createNormalPushRouter({ clock })`, **no `fileDir`**; answers `201` with that JSON.
+
+The `NP-xxxx` catalogue and envelope builders live in the module's `errors.ts`. `NP-0104`
+(non-boolean `distribute_now`) is ours only. `NP-0002`/`NP-0003` are intentionally not defined
+there — see the coupling note above.
 
 ## Database
 
+- Models: `PushRun`/`PushEdition` (auto-app-push) and `NormalPushRun`/`NormalPushEdition`/
+  `NormalPushShow` (normal-push) — separate table sets per feature module, not a
+  shared/generalized schema. Integration tests delete child rows first (shows → editions → runs):
+  the foreign keys are `RESTRICT`.
 - `prisma/schema.prisma` is the source of truth. Change a model → `yarn db:migrate --name x` →
   **`yarn db:generate`** (`migrate dev` did not regenerate the client for us) → commit the schema
   and the new `prisma/migrations/*` folder together. Never alter tables in TablePro on a shared
@@ -144,7 +192,9 @@ error handler and `requireApiToken` import from there.
 
 Vitest + supertest. Pure modules (`validate`, `csv`, `time`, `schema`, `errors`) have unit tests
 with no I/O; `service.test.ts` and `router.test.ts` are integration tests against the compose
-MySQL and a `mkdtemp` directory, and truncate `push_editions` / `push_runs` in `afterEach`.
+MySQL, and truncate their module's own tables in `afterEach` — auto-app-push also manages a
+`mkdtemp` directory for its file-writing tests; normal-push has no files, so its integration
+tests only touch the database.
 
 `fileParallelism: false` in `vitest.config.ts` is load-bearing: the integration files share one
 database, and running them in parallel made one file's `deleteMany` race another's assertions.
