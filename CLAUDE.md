@@ -5,7 +5,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-docker compose up -d   # MySQL 8 — tests and yarn dev both need it
+docker compose up -d mysql  # MySQL 8 only — tests and yarn dev on the host both need it
+docker compose up -d   # or the whole stack: MySQL + api + the FE console (web) — see Docker below
 yarn install
 yarn dev               # tsx watch; the startup log line names the port
 yarn typecheck         # tsc --noEmit
@@ -203,6 +204,27 @@ database, and running them in parallel made one file's `deleteMany` race another
 so the worker exits. Keep router tests to the HTTP surface (status, headers, envelope) and put
 rule-by-rule cases in the unit tests.
 
+## Docker
+
+`docker-compose.yml` is the local dev stack for both repos: `mysql`, `api` (this repo's
+`Dockerfile.dev`) and `web` (built from `../fe-push-notification-tool/Dockerfile.dev`, so the two
+repos must sit side by side).
+
+- The `Dockerfile.dev` images hold only `node_modules` (Linux binaries — esbuild, Prisma's engines,
+  oxlint). Source is bind-mounted at `/app`, and an anonymous volume keeps the host's macOS
+  `node_modules` out. A dependency change needs `docker compose up -d --build`.
+- `api` runs `yarn db:generate && yarn db:deploy && yarn dev` on start. `migrate deploy` needs no
+  shadow database; write new migrations with `docker compose exec api yarn db:migrate --name …`.
+- No value is written into the compose file: everything is interpolated from `.env` or loaded with
+  `env_file`. `api` overrides `DATABASE_URL` to the `mysql` host; dotenv never overrides a variable
+  already set, so `env.ts` and `prisma.config.ts` read the compose one in the container and
+  `.env`'s `127.0.0.1` one on the host.
+- `PORT` is repeated under `environment` so `PORT=8081 docker compose up -d` moves the server, the
+  published port and `web`'s `NEXT_PUBLIC_EXPRESS_API_URL` (`http://localhost:${PORT}` — the
+  browser calls the API directly, so it is the host port, never `http://api:…`) together. Use it
+  when a local `ecs-api` already holds 8080.
+
 ## Scope notes
 
-Local development only for now — no Dockerfile, CI or production deployment until asked.
+Docker is dev-only (`Dockerfile.dev`, bind mounts, `tsx watch`). No production image, CI or
+deployment until asked.

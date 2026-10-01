@@ -8,14 +8,41 @@ same payload, writes the same delivery file, and records every run in MySQL.
 
 ## Run
 
+Either way, start with `cp .env.example .env` and fill in every key — see Environment below.
+
+### Everything in Docker (MySQL + this API + the FE console)
+
 ```bash
-cp .env.example .env          # fill in every key — see Environment below
-docker compose up -d          # MySQL 8, using the MYSQL_* values from .env
+docker compose up -d --build  # first run builds the images; later runs: docker compose up -d
+docker compose logs -f api web
+```
+
+- `api` (`Dockerfile.dev`) runs `yarn db:generate`, `yarn db:deploy` and `yarn dev` on every start,
+  so the client and the schema are always current. It reaches MySQL as the `mysql` service; compose
+  builds that `DATABASE_URL` from the `MYSQL_*` values, and `.env`'s `127.0.0.1` URL stays for the
+  host workflow.
+- `web` builds from `../fe-push-notification-tool` (its `Dockerfile.dev`), so the two repos must sit
+  side by side. It serves http://localhost:3000 and calls this API at `http://localhost:$PORT`.
+- Both bind-mount their repo, so edits reload as they do on the host. `node_modules` stays in the
+  containers — after changing `package.json`, rebuild with `docker compose up -d --build`.
+- `CORS_ORIGIN` must include `http://localhost:3000`.
+- If `PORT` is already taken on the host (a local `ecs-api` also listens on 8080), override it for
+  this stack only — the server, the published port and the FE's URL move together:
+  `PORT=8081 docker compose up -d`.
+- A new migration: `docker compose exec api yarn db:migrate --name <what_changed>`.
+
+### API on the host, MySQL in Docker
+
+```bash
+docker compose up -d mysql    # MySQL 8 only, using the MYSQL_* values from .env
 yarn install
 yarn db:generate              # build the Prisma client from prisma/schema.prisma
 yarn db:migrate               # apply migrations
 yarn dev                      # restarts on file change; the log line says the port
 ```
+
+`yarn test` needs this MySQL too. Stop the `api` container first (`docker compose stop api web`)
+if it holds `PORT`.
 
 ```bash
 curl -i "localhost:$PORT/health"   # {"status":"ok","db":"ok"}
