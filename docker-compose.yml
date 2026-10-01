@@ -1,14 +1,23 @@
-# Local MySQL 8 for development. Nothing here is used on staging/production,
-# where the database is a managed instance and the app gets DATABASE_URL from
-# the environment.
+# Local development stack: MySQL 8, this API, and the FE console. Nothing here
+# is used on staging/production, where the database is a managed instance and
+# the app gets its variables from the platform.
 #
-#   docker compose up -d      start (first run pulls the image)
-#   docker compose ps         "healthy" means it accepts connections
-#   docker compose down       stop; data survives in the volume
-#   docker compose down -v    stop AND wipe the data
+#   docker compose up -d            whole stack (first run builds the images)
+#   docker compose up -d mysql      MySQL only — for `yarn dev` / `yarn test` on the host
+#   docker compose ps               "healthy" means it accepts connections / answers /health
+#   docker compose logs -f api web  follow the API and FE dev servers
+#   docker compose down             stop; data survives in the volume
+#   docker compose down -v          stop AND wipe the data
 #
-# The MYSQL_* values come from .env (copy .env.example). The same values go
-# into DATABASE_URL, which is what the app and Prisma read.
+# Every value comes from .env (copy .env.example); none is written here. The
+# MYSQL_* values create the container and also build the in-network
+# DATABASE_URL below. CORS_ORIGIN must include http://localhost:3000 for the
+# FE to call the API. If PORT is taken on the host (a local ecs-api also uses
+# 8080), override it for this stack only: PORT=8081 docker compose up -d
+#
+# The `web` service builds from ../fe-push-notification-tool, so the two repos
+# must sit side by side. Its own settings (ECS_API_URL) come from that repo's
+# .env.local, which `next dev` reads from the bind mount.
 
 services:
   mysql:
@@ -37,6 +46,58 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: push-tool-api
+    env_file: .env
+    environment:
+      # .env's DATABASE_URL points at 127.0.0.1 for the host workflow. Inside
+      # the network the database is the `mysql` service. dotenv never overrides
+      # a variable that is already set, so this one wins in the container.
+      DATABASE_URL: mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE}
+      # Repeated so a shell override (`PORT=8081 docker compose up -d`, e.g.
+      # when ecs-api already holds 8080) moves the server, the published port
+      # and the FE's URL together, instead of only the latter two.
+      PORT: ${PORT}
+    ports:
+      - "${PORT}:${PORT}"
+    volumes:
+      - .:/app
+      # Keep the image's Linux node_modules; the host's are macOS binaries.
+      - /app/node_modules
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      # GET /health checks the database too.
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:'+process.env.PORT+'/health').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 30s
+
+  web:
+    build:
+      context: ../fe-push-notification-tool
+      dockerfile: Dockerfile.dev
+    container_name: push-tool-web
+    environment:
+      # The browser calls the API directly (no proxy), so this is the port
+      # published on the host, not http://api:…. A process variable beats
+      # .env.local in Next.
+      NEXT_PUBLIC_EXPRESS_API_URL: http://localhost:${PORT}
+    ports:
+      - "3000:3000"
+    volumes:
+      - ../fe-push-notification-tool:/app
+      - /app/node_modules
+      # Keep the container's build cache apart from the host's `yarn dev`.
+      - /app/.next
+    depends_on:
+      - api
 
 volumes:
   mysql_data:
