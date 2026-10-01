@@ -70,6 +70,22 @@ export const unknownParameters = (keys: string[]) =>
     })),
   })
 
+/**
+ * 502 — a code needed expanding and the e+ search API could not answer. Nothing the caller did
+ * wrong; nothing was written, so retrying the same body is safe.
+ */
+export const searchUnavailable = (cause: unknown) =>
+  new AppError(
+    502,
+    {
+      error_id: 'NP-0006',
+      code: 'SEARCH_UNAVAILABLE',
+      title: 'Search API unavailable',
+      message: 'The e+ search API could not be reached, so the show codes could not be expanded. (NP-0006)',
+    },
+    { cause },
+  )
+
 /** 500 — validation passed but the database write failed. */
 export const creationFailed = (cause: unknown) =>
   new AppError(

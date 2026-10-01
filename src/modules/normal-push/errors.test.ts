@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { creationFailed, fieldError, invalidParameter, unknownParameters } from './errors.js'
+import { creationFailed, fieldError, invalidParameter, searchUnavailable, unknownParameters } from './errors.js'
 
 describe('normal-push errors', () => {
   it('fieldError appends the id to the message', () => {
@@ -25,6 +25,14 @@ describe('normal-push errors', () => {
       error_id: 'NP-0004',
       errors: [{ error_id: 'NP-0004', field: 'login_ids', message: 'login_ids is not a known parameter (NP-0004)' }],
     })
+  })
+
+  it('searchUnavailable is a 502 NP-0006 with no field errors that keeps the cause', () => {
+    const cause = new Error('GET /koen answered 503')
+    const e = searchUnavailable(cause)
+    expect(e.status).toBe(502)
+    expect(e.body).toMatchObject({ error_id: 'NP-0006', code: 'SEARCH_UNAVAILABLE', title: 'Search API unavailable', errors: [] })
+    expect(e.cause).toBe(cause)
   })
 
   it('creationFailed is a 500 NP-0005 that keeps the cause', () => {

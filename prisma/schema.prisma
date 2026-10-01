@@ -53,9 +53,9 @@ model PushEdition {
   @@map("push_editions")
 }
 
-/// One accepted POST /api/notifications/normal-pushes. No delivery file is written for this
-/// type — real delivery, if any, happens entirely outside this service (ecs-api's own
-/// create_topics_edition path). This model is persistence only.
+/// One accepted POST /api/notifications/normal-pushes. Its editions and topics are what
+/// ecs-api's `PushTest::Common.create_topics_edition` builds (docs/create_topics_edition_flow.md);
+/// nothing is delivered — the notification pipeline after that method runs only in ecs-api.
 model NormalPushRun {
   id            BigInt              @id @default(autoincrement())
   /// The `date` of the request (Tokyo calendar date), stored as a DATE.
@@ -67,20 +67,60 @@ model NormalPushRun {
   @@map("normal_push_runs")
 }
 
+/// ecs-api's `Epica::TopicsEditionV2#status`. This service only ever reaches `edited`: `set`
+/// needs the notification pipeline, which runs in ecs-api.
+enum NormalPushEditionStatus {
+  created
+  edited
+  set
+}
+
 /// One edition (one notification) of a normal-push run: a one-hour window holding 1+ shows.
+/// Mirrors ecs-api's `epica_topics_editions_v2` — what `create_topics_edition` creates
+/// (docs/create_topics_edition_flow.md, step 2).
 model NormalPushEdition {
-  id        BigInt           @id @default(autoincrement())
-  runId     BigInt           @map("run_id")
-  run       NormalPushRun    @relation(fields: [runId], references: [id])
+  id          BigInt                  @id @default(autoincrement())
+  runId       BigInt                  @map("run_id")
+  run         NormalPushRun           @relation(fields: [runId], references: [id])
   /// The start of the one-hour window, UTC. Tokyo wall-clock time is derived on read.
-  publishAt DateTime         @map("publish_at")
-  createdAt DateTime         @default(now()) @map("created_at")
-  shows     NormalPushShow[]
+  periodStart DateTime                @map("period_start")
+  /// periodStart + 1 hour.
+  periodEnd   DateTime                @map("period_end")
+  status      NormalPushEditionStatus @default(created)
+  /// When the topics were created (`edited!`).
+  editedAt    DateTime?               @map("edited_at")
+  createdAt   DateTime                @default(now()) @map("created_at")
+  shows       NormalPushShow[]
+  topics      NormalPushTopic[]
 
   @@index([runId])
-  /// The overlap check (NP-0208) looks editions up by window start.
-  @@index([publishAt])
+  /// The overlap check (NP-0208) compares windows: period_start < new end AND period_end > new start.
+  @@index([periodStart])
+  @@index([periodEnd])
   @@map("normal_push_editions")
+}
+
+/// One topic of an edition — one per performance. A show whose code has a P021 part makes one;
+/// a code without it is expanded through the e+ search API into one per performance, up to 200.
+/// Mirrors ecs-api's `epica_topics_v2` plus its single `epica_topic_areas_v2` row
+/// (docs/create_topics_edition_flow.md, steps 3-4).
+model NormalPushTopic {
+  id            BigInt            @id @default(autoincrement())
+  editionId     BigInt            @map("edition_id")
+  edition       NormalPushEdition @relation(fields: [editionId], references: [id])
+  /// The performer: `tag:eplus.jp,2010:performers/<performer_id padded to 10 digits>`.
+  subjectUri    String            @map("subject_uri") @db.VarChar(191)
+  /// The performance: `tag:eplus.jp,2010:shows/<kogyo>-<sub>-<koen>`.
+  objectUri     String            @map("object_uri") @db.VarChar(191)
+  hook          String            @db.VarChar(16)
+  /// Always the edition's periodStart.
+  willPublishAt DateTime          @map("will_publish_at")
+  /// Always `anywhere` (全国): create_topics_edition does not filter by prefecture.
+  area          String            @default("anywhere") @db.VarChar(32)
+  createdAt     DateTime          @default(now()) @map("created_at")
+
+  @@index([editionId])
+  @@map("normal_push_topics")
 }
 
 /// One show inside an edition, as sent: `{ code, performer_id, hook }`.

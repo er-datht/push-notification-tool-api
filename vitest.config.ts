@@ -17,6 +17,9 @@ export default defineConfig({
     // Set before any test file is imported, so src/lib/env.ts sees them.
     env: {
       API_TOKEN: TEST_API_TOKEN,
+      // Only to satisfy env.ts: tests pass a stub searchKoen and never reach this host.
+      EPLUS_SEARCH_API_URL: 'http://eplus-search.invalid',
+      EPLUS_SEARCH_API_KEY: 'vitest-only-not-a-real-key',
     },
   },
 })

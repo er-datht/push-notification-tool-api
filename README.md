@@ -54,12 +54,13 @@ curl -i "localhost:$PORT/health"   # {"status":"ok","db":"ok"}
 |---|---|---|---|
 | `GET` | `/health` | none | process + database check |
 | `POST` | `/api/notifications/auto-app-pushes` | `X-APIToken` | validate an auto-app-push request, write one delivery CSV per edition under `PUSH_FILE_DIR`, record the run in `push_runs` / `push_editions`; `201` with no body |
-| `POST` | `/api/notifications/normal-pushes` | `X-APIToken` | validate a normal-push request (ecs-api's contract) and record the run in `normal_push_runs` / `normal_push_editions` / `normal_push_shows` — no delivery file is written, no downstream system is called; `201` with the created editions |
+| `POST` | `/api/notifications/normal-pushes` | `X-APIToken` | validate a normal-push request (ecs-api's contract) and build what ecs-api's `create_topics_edition` builds (`docs/create_topics_edition_flow.md`): editions in `normal_push_editions`, the shows as sent, and one topic per performance in `normal_push_topics` — a code with no `P021` part is expanded through the e+ search API. Nothing is delivered; `201` with the created editions |
 
 Request body, validation rules and error ids: `docs/superpowers/specs/2026-09-22-auto-app-push-design.md`
 and `docs/superpowers/specs/2026-09-28-normal-push-design.md`.
 The auto-app-push delivery file matches what the Rails `ecs-api` writes; nothing is uploaded or sent.
-normal-push writes no file at all — see "Out of scope" in its design doc.
+normal-push writes no file and delivers nothing; it calls the e+ search API only to expand a code
+with no `P021` part — see its design doc and `docs/create_topics_edition_flow.md`.
 
 ```bash
 curl -i -X POST "localhost:$PORT/api/notifications/auto-app-pushes" \
@@ -76,12 +77,14 @@ curl -i -X POST "localhost:$PORT/api/notifications/normal-pushes" \
 ```
 
 ```json
-{"editions":[{"id":1,"period_start":"2026-09-30T17:00:00+09:00","period_end":"2026-09-30T18:00:00+09:00","status":"edited","topics_count":2}]}
+{"editions":[{"id":1,"period_start":"2026-09-30T17:00:00+09:00","period_end":"2026-09-30T18:00:00+09:00","status":"edited","topics_count":37}]}
 ```
 
 (`publish_hour_min` starts a one-hour window between 08:00 and 21:00 Tokyo; a start in the past is
 fine and there is no 2-hour cap. There is no `login_ids` — sending it is `400 NP-0004`. Sending the
-same hour again is `422 NP-0208`. The full contract is the FE's `docs/API-DOC-normal-push.md`.)
+same hour again is `422 NP-0208`. Both codes above have no `P021` part, so each is expanded into
+every performance under it and `topics_count` is the total; if the e+ search API fails the answer is
+`502 NP-0006` and nothing is written. The full contract is the FE's `docs/API-DOC-normal-push.md`.)
 
 ## Environment
 
@@ -99,6 +102,8 @@ variable named.
 | `CORS_ORIGIN` | app | Origin(s) the browser may call from, comma-separated. In development, the FE dev server. |
 | `API_TOKEN` | app | Shared secret the FE sends as `X-APIToken`. Any string locally; on a shared environment, whatever that environment's secret store holds. |
 | `PUSH_FILE_DIR` | app | Directory the delivery CSV files are written to, relative to the process cwd. Git-ignored. |
+| `EPLUS_SEARCH_API_URL` | app | Base URL of the e+ search API v3 (ecs-api's `eplus_search_api_v3_url`). normal-push calls `GET /koen` on it to expand a show code with no `P021` part. |
+| `EPLUS_SEARCH_API_KEY` | app | That API's `X-APIToken` (ecs-api's `eplus_search_api_v3_key`). With a wrong key, only codes that need expanding fail (`502 NP-0006`). |
 | `DATABASE_URL` | app + Prisma CLI | `mysql://<user>:<password>@<host>:<port>/<database>`. Must agree with the `MYSQL_*` values. Use `127.0.0.1` rather than `localhost` — the MySQL driver may read `localhost` as a Unix socket, which a Docker container does not have. |
 | `MYSQL_ROOT_PASSWORD` | docker-compose | Root password for the local container. |
 | `MYSQL_DATABASE` | docker-compose | Database the container creates. |
@@ -106,7 +111,8 @@ variable named.
 | `MYSQL_PASSWORD` | docker-compose | That user's password. |
 | `MYSQL_PORT` | docker-compose | Host port the container publishes. |
 
-`yarn test` reads the same `.env`, so it needs every key set too.
+`yarn test` reads the same `.env`, so it needs every key set too (the two `EPLUS_SEARCH_*` keys are
+the exception: `vitest.config.ts` supplies dummies, and tests stub the search call).
 
 ## TablePro
 
@@ -114,7 +120,7 @@ Connect with the `MYSQL_*` values from your own `.env`: host `127.0.0.1`, and th
 password and database you set there.
 
 After `yarn db:migrate` you will see `push_runs`, `push_editions`, `normal_push_runs`,
-`normal_push_editions`, `normal_push_shows` and `_prisma_migrations` (Prisma's ledger of applied migrations).
+`normal_push_editions`, `normal_push_shows`, `normal_push_topics` and `_prisma_migrations` (Prisma's ledger of applied migrations).
 Do not change tables by hand; edit `prisma/schema.prisma` and run `yarn db:migrate`.
 
 ## Scripts

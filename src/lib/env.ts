@@ -39,6 +39,10 @@ const schema = z.object({
   API_TOKEN: z.string().min(1),
   // Where delivery CSV files are written, relative to the process cwd.
   PUSH_FILE_DIR: z.string().min(1),
+  // The e+ search API normal-push calls to expand a show code with no P021 part
+  // (ecs-api's Global.eplus_search_api_v3_url / _key).
+  EPLUS_SEARCH_API_URL: z.url({ protocol: /^https?$/ }),
+  EPLUS_SEARCH_API_KEY: z.string().min(1),
 })
 
 // A key with no value in .env (`PORT=`) arrives as "" rather than undefined.
