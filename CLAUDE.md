@@ -39,6 +39,9 @@ These documents are binding for the endpoints here:
 - `../fe-push-notification-tool/docs/API-DOC-normal-push.md` — the normal-push contract (ecs-api's):
   `editions[].shows[]` of `{ code, performer_id, hook }`, **no `login_ids`**, the `NP-xxxx` ids, and a
   `201` that lists the created editions.
+- `docs/create_topics_edition_flow.md` — what ecs-api's `PushTest::Common.create_topics_edition`
+  does step by step. normal-push builds the same edition and topics; read it before changing
+  how a show code is read or expanded.
 - `../API naming convention rules.pdf` — property names `snake_case`, endpoints `kebab-case`
   and plural, one identifier called `id`, booleans not `"0"`/`"1"`, no romanised Japanese.
 
@@ -130,7 +133,8 @@ so they moved to `src/lib/time.ts` when `normal-push` was added — date-fns + `
 `src/modules/normal-push/`, designed in `docs/superpowers/specs/2026-09-28-normal-push-design.md`:
 
 It implements ecs-api's normal push contract (`../fe-push-notification-tool/docs/API-DOC-normal-push.md`):
-`{ date?, editions: [{ publish_hour_min, shows: [{ code, performer_id, hook }] }], distribute_now? }`.
+`{ date?, editions: [{ publish_hour_min, shows: [{ code, performer_id, hook }] }], distribute_now? }`,
+and builds what ecs-api's `create_topics_edition` builds (`docs/create_topics_edition_flow.md`).
 
 - `schema.ts` only answers "which keys are unknown?" (→ `400 NP-0004`), at all three levels —
   top, edition, show. `login_ids` is not a key, so sending it is a 400, like ecs-api.
@@ -139,16 +143,24 @@ It implements ecs-api's normal push contract (`../fe-push-notification-tool/docs
   window**: it must start between 08:00 and 21:00, a start in the past is fine, and there is no
   lead-time cap. `hook` is `preorder` or `firstcome` only (a mixed push is two shows with
   different hooks). `performer_id` is a positive safe integer of at most 16 digits, kept as a
-  `bigint`. Two editions in the same request less than an hour apart are `NP-0208`.
-- `service.ts` is the only place with I/O: unknown keys → validate → overlap against editions
-  already in the database (`NP-0208`, a start within ±60 min) → one nested
-  `prisma.normalPushRun.create` (run → editions → shows). **No file-writing step, no delivery** —
-  a `201` means "validated and recorded"; real delivery is ecs-api's job. It returns ecs-api's
-  `201` body: `{ editions: [{ id, period_start, period_end, status: "edited", topics_count }] }`,
-  with `+09:00` ISO times (`formatTokyoIso`) and `topics_count` = the number of shows (this service
-  does not expand a code into its performances). Failures after validation are `500 NP-0005` with
-  `cause`.
-- `router.ts` — `createNormalPushRouter({ clock })`, **no `fileDir`**; answers `201` with that JSON.
+  `bigint`. `code` must match ecs-api's `SHOW_ID_FORMAT`, ported in `show-code.ts`
+  (`parseShowCode`: 6-digit kogyo, 4-digit tour, optional `-P003xxxx` / `P021xxx` parts, optional
+  `?query`). Two editions in the same request less than an hour apart are `NP-0208`.
+- `service.ts` is the only place with I/O, in `create_topics_edition`'s order: unknown keys →
+  validate → overlap against saved editions (`NP-0208`, ecs-api's
+  `period_start < new end AND period_end > new start`) → **expand every show into its
+  performances**: a code with a `P021` part is one; one without it goes to the e+ search API
+  (`src/lib/eplus-search.ts`, `GET /koen`, up to 200, `502 NP-0006` on failure) → one nested
+  `prisma.normalPushRun.create` (run → editions with `period_end` / `status: edited` /
+  `edited_at` → shows as sent + one topic per performance with ecs-api's `subject_uri` /
+  `object_uri` / `area: anywhere`). Every search happens before anything is written, so a failure
+  leaves nothing behind (ecs-api leaves the earlier editions). Nothing after `edited!` happens —
+  no notifications, no delivery; `distribute_now` is recorded only. The `201` is ecs-api's:
+  `{ editions: [{ id, period_start, period_end, status, topics_count }] }` with `+09:00` ISO times
+  and `topics_count` = topics actually created. A failed write is `500 NP-0005` with `cause`.
+- `router.ts` — `createNormalPushRouter({ clock, searchKoen })`, **no `fileDir`**. `createApp`
+  builds the real `searchKoen` from `EPLUS_SEARCH_API_URL` / `EPLUS_SEARCH_API_KEY`; **tests always
+  pass a stub** — nothing in the suite reaches the network.
 
 The `NP-xxxx` catalogue and envelope builders live in the module's `errors.ts`. `NP-0104`
 (non-boolean `distribute_now`) is ours only. `NP-0002`/`NP-0003` are intentionally not defined
@@ -157,9 +169,15 @@ there — see the coupling note above.
 ## Database
 
 - Models: `PushRun`/`PushEdition` (auto-app-push) and `NormalPushRun`/`NormalPushEdition`/
-  `NormalPushShow` (normal-push) — separate table sets per feature module, not a
-  shared/generalized schema. Integration tests delete child rows first (shows → editions → runs):
-  the foreign keys are `RESTRICT`.
+  `NormalPushShow`/`NormalPushTopic` (normal-push; the edition and topic mirror ecs-api's
+  `epica_topics_editions_v2` / `epica_topics_v2`) — separate table sets per feature module, not a
+  shared/generalized schema. Integration tests delete child rows first (topics, shows → editions
+  → runs): the foreign keys are `RESTRICT`.
+- `prisma migrate dev` refuses to run without a terminal (as from Claude Code). Write the
+  migration SQL by hand in a new `prisma/migrations/<timestamp>_<name>/` folder, apply it with
+  `yarn db:deploy`, and check `yarn prisma migrate diff --from-config-datasource --to-schema
+  prisma/schema.prisma --script` prints an empty migration. Hand-written SQL is also how a
+  column is renamed rather than dropped (`20261001090000_normal_push_topics`).
 - `prisma/schema.prisma` is the source of truth. Change a model → `yarn db:migrate --name x` →
   **`yarn db:generate`** (`migrate dev` did not regenerate the client for us) → commit the schema
   and the new `prisma/migrations/*` folder together. Never alter tables in TablePro on a shared

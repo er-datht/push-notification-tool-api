@@ -15,11 +15,14 @@
 import type { FieldError } from '../../lib/errors.js'
 import { parseCalendarDate, todayInTokyo, tokyoDateTime } from '../../lib/time.js'
 import { fieldError } from './errors.js'
+import { parseShowCode, type ShowCode } from './show-code.js'
 
 export type Hook = 'preorder' | 'firstcome'
 
 export interface ValidShow {
   code: string
+  /** The code read the way ecs-api's SHOW_ID_FORMAT reads it. */
+  parsed: ShowCode
   /** Up to 16 digits, so it is kept as a bigint all the way to the database. */
   performerId: bigint
   hook: Hook
@@ -27,7 +30,7 @@ export interface ValidShow {
 
 export interface ValidEdition {
   /** The start of the one-hour window: `date` + hour:minute in Asia/Tokyo. */
-  publishAt: Date
+  periodStart: Date
   shows: ValidShow[]
 }
 
@@ -99,8 +102,6 @@ interface EditionResult {
 }
 
 const HOOKS: readonly string[] = ['preorder', 'firstcome']
-/** A show code, optionally followed by one `P021…` performance part. A `[公演]` prefix fails this. */
-const CODE_RE = /^\d+-P\d+(?:P\d+)?$/
 const WINDOW_START_MIN = 8 * 60 // 08:00
 const WINDOW_LAST_START_MIN = 21 * 60 // 21:00, inclusive — the window then ends at 22:00
 
@@ -143,10 +144,13 @@ function validateEdition(raw: unknown, index: number, date: string): EditionResu
       let ok = true
 
       const code = typeof s.code === 'string' ? s.code.trim() : ''
+      // ecs-api checks the code against SHOW_ID_FORMAT (show-code.ts), the regex
+      // create_topics_edition reads it with. A `[公演]` prefix fails it.
+      const parsed = code === '' ? null : parseShowCode(code)
       if (code === '') {
         errors.push(fieldError('NP-0202', showField('code')))
         ok = false
-      } else if (!CODE_RE.test(code)) {
+      } else if (parsed === null) {
         errors.push(fieldError('NP-0203', showField('code')))
         ok = false
       }
@@ -161,10 +165,10 @@ function validateEdition(raw: unknown, index: number, date: string): EditionResu
         ok = false
       }
 
-      if (ok) shows.push({ code, performerId: BigInt(s.performer_id as number), hook: s.hook as Hook })
+      if (ok && parsed) shows.push({ code, parsed, performerId: BigInt(s.performer_id as number), hook: s.hook as Hook })
     })
   }
 
   if (errors.length > 0 || publishAt === null) return { value: null, errors, publishAt }
-  return { value: { publishAt, shows }, errors, publishAt }
+  return { value: { periodStart: publishAt, shows }, errors, publishAt }
 }

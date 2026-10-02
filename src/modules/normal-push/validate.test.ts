@@ -33,8 +33,13 @@ describe('validate: a valid body', () => {
     expect(r.ok).toBe(true)
     if (!r.ok) return
     expect(r.value.editions).toHaveLength(2)
-    expect(r.value.editions[0].publishAt.toISOString()).toBe('2026-09-22T08:00:00.000Z')
-    expect(r.value.editions[0].shows[1]).toEqual({ code: '9014500001-P0030065', performerId: 2762n, hook: 'preorder' })
+    expect(r.value.editions[0].periodStart.toISOString()).toBe('2026-09-22T08:00:00.000Z')
+    expect(r.value.editions[0].shows[1]).toEqual({
+      code: '9014500001-P0030065',
+      parsed: { kogyoCode: '901450', tourCode: '0001', kogyoSubCode: '0065', koenCode: null },
+      performerId: 2762n,
+      hook: 'preorder',
+    })
     expect(r.value.editions[1].shows[0].performerId).toBe(75223n)
   })
 
@@ -80,7 +85,15 @@ describe('validate: edition and show rules', () => {
   it('NP-0202 for a blank code, NP-0203 for a malformed one (including the [公演] prefix)', () => {
     expect(errorIds(body({ editions: [edition({ shows: [show({ code: '  ' })] })] }))).toEqual(['NP-0202'])
     expect(errorIds(body({ editions: [edition({ shows: [show({ code: '[公演]9014500001-P0030056' })] })] }))).toEqual(['NP-0203'])
-    expect(errorIds(body({ editions: [edition({ shows: [show({ code: '9014500001' })] })] }))).toEqual(['NP-0203'])
+    // SHOW_ID_FORMAT wants exactly 6 + 4 digits in front.
+    expect(errorIds(body({ editions: [edition({ shows: [show({ code: '901450001-P0030056' })] })] }))).toEqual(['NP-0203'])
+    expect(errorIds(body({ editions: [edition({ shows: [show({ code: '12-P34' })] })] }))).toEqual(['NP-0203'])
+  })
+
+  it('accepts every shape SHOW_ID_FORMAT accepts, a bare kogyo + tour included', () => {
+    for (const code of ['9014500001', '9014500001-P0030056', '9011910001-P0030007P021005', '9014500001-P0030056?x=1']) {
+      expect(errorIds(body({ editions: [edition({ shows: [show({ code })] })] }))).toEqual([])
+    }
   })
 
   it.each([0, -1, 1.5, '2762', 2 ** 60])('NP-0204 for performer_id %s', (performer_id) => {

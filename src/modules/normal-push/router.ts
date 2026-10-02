@@ -8,18 +8,21 @@
  */
 import { Router } from 'express'
 
+import type { SearchKoen } from '../../lib/eplus-search.js'
 import { createNormalPush } from './service.js'
 
 export interface NormalPushRouterDeps {
   /** Injected so tests can pin "now"; app.ts passes () => new Date(). */
   clock: () => Date
+  /** The e+ search API's koen list; tests pass a stub. */
+  searchKoen: SearchKoen
 }
 
-export function createNormalPushRouter({ clock }: NormalPushRouterDeps) {
+export function createNormalPushRouter({ clock, searchKoen }: NormalPushRouterDeps) {
   const router = Router()
 
   router.post('/', async (req, res) => {
-    const created = await createNormalPush(req.body, { now: clock() })
+    const created = await createNormalPush(req.body, { now: clock(), searchKoen })
     res.status(201).json(created)
   })
 

@@ -16,6 +16,7 @@ import helmet from 'helmet'
 import { pinoHttp } from 'pino-http'
 
 import { env } from './lib/env.js'
+import { createSearchKoen, type SearchKoen } from './lib/eplus-search.js'
 import { logger } from './lib/logger.js'
 import { requireApiToken } from './middleware/api-token.js'
 import { errorHandler, notFoundHandler } from './middleware/error-handler.js'
@@ -28,9 +29,15 @@ export interface AppOptions {
   clock?: () => Date
   /** Where delivery files go. Defaults to env.PUSH_FILE_DIR. */
   fileDir?: string
+  /** normal-push's e+ search API call. Defaults to the real API from env; tests pass a stub. */
+  searchKoen?: SearchKoen
 }
 
-export function createApp({ clock = () => new Date(), fileDir = env.PUSH_FILE_DIR }: AppOptions = {}) {
+export function createApp({
+  clock = () => new Date(),
+  fileDir = env.PUSH_FILE_DIR,
+  searchKoen = createSearchKoen({ url: env.EPLUS_SEARCH_API_URL, key: env.EPLUS_SEARCH_API_KEY }),
+}: AppOptions = {}) {
   const app = express()
 
   // 1. Security headers on every response, including errors — so it goes first.
@@ -72,7 +79,7 @@ export function createApp({ clock = () => new Date(), fileDir = env.PUSH_FILE_DI
   //    routers sit behind the X-APIToken check.
   app.use('/health', healthRouter)
   app.use('/api/notifications/auto-app-pushes', requireApiToken, createAutoAppPushRouter({ clock, fileDir }))
-  app.use('/api/notifications/normal-pushes', requireApiToken, createNormalPushRouter({ clock }))
+  app.use('/api/notifications/normal-pushes', requireApiToken, createNormalPushRouter({ clock, searchKoen }))
 
   // 6. Nothing matched -> 404 envelope. 7. Anything thrown -> error envelope.
   //    Both must stay last.
