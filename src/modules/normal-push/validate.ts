@@ -1,6 +1,6 @@
 /**
  * The rule table for POST /api/notifications/normal-pushes, as one pure function — the rules of
- * ecs-api's normal push endpoint (fe-push-notification-tool/docs/API-DOC-normal-push.md).
+ * ecs-api's normal push endpoint (fe-docs/API-DOC-normal-push.md).
  *
  * Same shape as auto-app-push/validate.ts: never throws, never touches I/O or the clock (`now`
  * comes in as a parameter). Reports every problem it can find in one pass. When `date` is

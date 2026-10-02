@@ -65,7 +65,7 @@ Start from the template, keep every heading and checkbox, and fill only what the
 
 - **What Changed?** — what changed and why, in plain words, from `git log <base>..HEAD` and
   `git diff <base>...HEAD --stat`. Name the endpoints touched (`POST /api/notifications/…`) and
-  the contract they follow (the FE repo's `docs/API-DOC-*.md`).
+  the contract they follow (`../fe-docs/API-DOC-*.md`).
 - **Screenshots/Videos** — leave the `<!-- -->` placeholder for the user. Never invent evidence.
 - **Impact Area Identification** — list what the diff can reach, e.g. `src/app.ts` (middleware
   order, routers), `src/middleware/*` (every route), `src/lib/*` (shared by every module),
@@ -78,7 +78,7 @@ Start from the template, keep every heading and checkbox, and fill only what the
   Breaking change only when an already-merged endpoint's contract changed shape.
 - **Related Documentation** — link the docs the branch adds or changes:
   `docs/superpowers/specs/*.md`, `README.md`, `CLAUDE.md`, and the FE contract it follows
-  (`../fe-push-notification-tool/docs/API-DOC-*.md`).
+  (`../fe-docs/API-DOC-*.md`).
 - **How to Test?** — `docker compose up -d`; `yarn install`; `yarn db:migrate` and `yarn db:generate`
   when the branch adds a migration; `yarn typecheck && yarn lint && yarn test`; a `curl` example
   for each new or changed endpoint (token from `$API_TOKEN`, never a value). Name the `.env` keys a
