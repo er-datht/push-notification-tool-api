@@ -1,6 +1,6 @@
 /**
  * The NP-xxxx ids for POST /api/notifications/normal-pushes — the same catalogue as ecs-api's
- * normal push endpoint (fe-push-notification-tool/docs/API-DOC-normal-push.md), so the frontend
+ * normal push endpoint (fe-docs/API-DOC-normal-push.md), so the frontend
  * reads both servers the same way. NP-0104 is ours only (ecs-api documents no id for a
  * non-boolean distribute_now), the same way auto-app-push added AP-0104.
  *

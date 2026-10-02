@@ -84,7 +84,7 @@ curl -i -X POST "localhost:$PORT/api/notifications/normal-pushes" \
 fine and there is no 2-hour cap. There is no `login_ids` — sending it is `400 NP-0004`. Sending the
 same hour again is `422 NP-0208`. Both codes above have no `P021` part, so each is expanded into
 every performance under it and `topics_count` is the total; if the e+ search API fails the answer is
-`502 NP-0006` and nothing is written. The full contract is the FE's `docs/API-DOC-normal-push.md`.)
+`502 NP-0006` and nothing is written. The full contract is the FE's `../fe-docs/API-DOC-normal-push.md`.)
 
 ## Environment
 

@@ -32,11 +32,11 @@ error ids of those documents still apply.
 
 These documents are binding for the endpoints here:
 
-- `../fe-push-notification-tool/docs/API-DOC-auto-app-push.md` — the auto-app-push contract the FE
+- `../fe-docs/API-DOC-auto-app-push.md` — the auto-app-push contract the FE
   is built against: `X-APIToken` header, request body, the `AP-xxxx` error ids, and the response
   rules (`201` with **no body**; failures in the shared error envelope; `422` for validation, `400`
   for an unreadable body or an unknown key, `401` with a body, `404` empty).
-- `../fe-push-notification-tool/docs/API-DOC-normal-push.md` — the normal-push contract (ecs-api's):
+- `../fe-docs/API-DOC-normal-push.md` — the normal-push contract (ecs-api's):
   `editions[].shows[]` of `{ code, performer_id, hook }`, **no `login_ids`**, the `NP-xxxx` ids, and a
   `201` that lists the created editions.
 - `docs/create_topics_edition_flow.md` — what ecs-api's `PushTest::Common.create_topics_edition`
@@ -132,7 +132,7 @@ so they moved to `src/lib/time.ts` when `normal-push` was added — date-fns + `
 
 `src/modules/normal-push/`, designed in `docs/superpowers/specs/2026-09-28-normal-push-design.md`:
 
-It implements ecs-api's normal push contract (`../fe-push-notification-tool/docs/API-DOC-normal-push.md`):
+It implements ecs-api's normal push contract (`../fe-docs/API-DOC-normal-push.md`):
 `{ date?, editions: [{ publish_hour_min, shows: [{ code, performer_id, hook }] }], distribute_now? }`,
 and builds what ecs-api's `create_topics_edition` builds (`docs/create_topics_edition_flow.md`).
 

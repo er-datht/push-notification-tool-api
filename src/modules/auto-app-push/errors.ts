@@ -2,7 +2,7 @@
  * The AP-xxxx ids for POST /api/notifications/auto-app-pushes.
  *
  * Ids and the shape come from the contract in
- * fe-push-notification-tool/docs/API-DOC-auto-app-push.md. The FE keys its own
+ * fe-docs/API-DOC-auto-app-push.md. The FE keys its own
  * wording off error_id, so the ids are stable and the message text is not a
  * contract — but the text still follows the contract's pattern:
  * "<what is wrong> (<id>)".
